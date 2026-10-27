@@ -1,37 +1,22 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# hounonukeana
 
-## Getting Started
+規制解釈AIの研究コンソールです。仮想金融市場で取引エージェントを大量エピソード実行し、
+複数のAIプロバイダー（OpenAI / Anthropic / Gemini / OpenAI互換 / Ollama）との連携・費用・監査を管理します。
 
-First, run the development server:
+## セットアップ
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm ci
+cp .env.local.example .env.local   # BASIC_AUTH_USERNAME / BASIC_AUTH_PASSWORD / API_KEY_ENCRYPTION_KEY を設定
+npm run dev                        # http://localhost:3000/research
+npm test
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Next.js 16 を使用しています。`middleware` は `proxy.ts` に名称変更されています。
 
 ## Basic認証
 
-アプリ全体（学生向け画面・研究コンソール・すべての `/api`）に HTTP Basic 認証をかけています。
+アプリ全体（研究コンソールの画面・すべての `/api`）に HTTP Basic 認証をかけています。
 
 - `proxy.ts` で全リクエストを検証し、さらに各 API Route Handler と研究コンソールのレイアウトでも再検証します（多層防御）。
 - 照合は SHA-256 ダイジェスト同士の `timingSafeEqual` による定数時間比較です。
@@ -48,8 +33,6 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 本番環境でこれらが未設定・不正な場合、`instrumentation.ts` がサーバーの起動を中止します（値は出力しません）。
 開発環境で未設定の場合のみ認証なしで動作し、セキュリティ画面に警告を表示します。
 `.env.local.example` を参考に `.env.local`（Git管理外）またはホスティング環境の環境変数に設定してください。
-
-> 以前の `BASIC_AUTH_USER` は `BASIC_AUTH_USERNAME` に名称変更しました。
 
 認証は `lib/server/auth` の `AuthProvider` / `Principal` / `Permission` で抽象化しており、将来の個別アカウント・権限管理・多要素認証へ差し替えられます。
 
@@ -92,9 +75,3 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 npm test                       # 単体・結合テスト（モックLLMサーバーを使用）
 REAL_API_TEST=1 npm test       # 実際のAPIへの疎通確認（ANTHROPIC_TEST_KEY 等を設定すると実キーで確認）
 ```
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
