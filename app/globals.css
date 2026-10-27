@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ===== 研究コンソール: 黒を基調にしたテーマ（半透明のすりガラス） ===== */
+/* 黒〜グレーの濃淡（bg-ink-900 などのユーティリティとして使える） */
+@theme {
+  --color-ink-50: #f5f5f6;
+  --color-ink-100: #e6e6e9;
+  --color-ink-200: #c9c9cf;
+  --color-ink-300: #a3a3ab;
+  --color-ink-400: #7c7c86;
+  --color-ink-500: #5c5c65;
+  --color-ink-600: #45454d;
+  --color-ink-700: #33333a;
+  --color-ink-800: #232328;
+  --color-ink-900: #17171a;
+  --color-ink-950: #0b0b0d;
+}
+
+.research-root {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  color: var(--color-ink-50);
+  color-scheme: dark; /* セレクトボックスやスクロールバーなどのネイティブ部品も暗色にする */
+  background-color: #050506;
+  font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic UI', 'Meiryo', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 透明感を出すための背景のごく淡い光。半透明のパネル越しに透けて見える */
+.research-root::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(40rem 28rem at 92% 0%, rgb(255 255 255 / 0.07), transparent 62%),
+    radial-gradient(36rem 26rem at 10% 35%, rgb(255 255 255 / 0.035), transparent 62%),
+    linear-gradient(160deg, #0d0d10 0%, #070708 55%, #040405 100%);
+}
+
+/* スクロール時の余白やオーバースクロールでも白が見えないよう、ページ全体を黒にする */
+html:has(.research-root),
+body:has(.research-root) {
+  background-color: #050506;
+}
+
+.research-root input[type='checkbox'] {
+  accent-color: #e6e6e9;
+}
+
+.research-root ::selection {
+  background: rgb(255 255 255 / 0.22);
+}
+
+/* 黒の半透明パネル（すりガラス） */
+.rc-glass {
+  background: linear-gradient(180deg, rgb(32 32 36 / 0.62), rgb(20 20 23 / 0.55));
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+  border: 1px solid rgb(255 255 255 / 0.09);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.06) inset,
+    0 12px 32px -16px rgb(0 0 0 / 0.8);
+}
+
+/* 主ボタン・アクティブ表示: 黒地に映える白 */
+.rc-primary {
+  color: #0b0b0d;
+  background-color: #f5f5f6;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.6) inset,
+    0 4px 14px -6px rgb(255 255 255 / 0.25);
+}
+
+.rc-primary:hover:not(:disabled) {
+  background-color: #ffffff;
+}
+
+.rc-primary:disabled {
+  opacity: 0.4;
+}
+
+/* サイドバー: 本文より一段深い黒 */
+.rc-sidebar {
+  background: linear-gradient(180deg, rgb(14 14 16 / 0.85), rgb(6 6 7 / 0.9));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid rgb(255 255 255 / 0.07);
+}
