@@ -7,6 +7,12 @@ export function checkEnvironment() {
   if (problems.length === 0) return;
   // 値は出力せず、変数名と問題点のみを表示する
   const lines = problems.map((p) => `  - ${p.variable}: ${p.problem}`).join('\n');
+  if (isProduction() && isVercel()) {
+    // Vercel ではプロセスを止めると原因が画面に出ないため停止しない。
+    // 代わりに proxy.ts が全リクエストを止め、認証済みの利用者に問題の変数名を表示する
+    console.error(`[startup] 必須の環境変数が正しく設定されていません。設定するまでアプリは利用できません。\n${lines}`);
+    return;
+  }
   if (isProduction()) {
     console.error(`[startup] 必須の環境変数が正しく設定されていないため起動を中止します。\n${lines}`);
     process.exit(1);

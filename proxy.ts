@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateHeaders, unauthorizedResponse } from '@/lib/server/auth';
-import { isProduction } from '@/lib/server/env';
+import { isProduction, validateRequiredEnv } from '@/lib/server/env';
+import { configProblemsResponse } from '@/lib/server/configStatus';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
@@ -37,6 +38,12 @@ export function proxy(request: NextRequest) {
   const result = authenticateHeaders(request.headers);
   if (!result.ok) {
     return unauthorizedResponse(result);
+  }
+
+  // 本番で必須の環境変数に問題があれば、認証済みの利用者にだけ原因（変数名と理由）を表示して処理を止める
+  if (production) {
+    const problems = validateRequiredEnv();
+    if (problems.length > 0) return configProblemsResponse(request.nextUrl.pathname, problems);
   }
 
   const response = NextResponse.next();
