@@ -16,6 +16,9 @@ export async function readJson(request: Request, maxBytes = 64 * 1024): Promise<
   const text = await request.text();
   if (text.length > maxBytes) throw new ValidationError('リクエストが大きすぎます。');
   if (!text) return {};
+  // フォーム送信（text/plain 等）による他サイトからのリクエストを受け付けないよう、JSON の宣言を必須にする
+  const type = request.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') throw new ValidationError('Content-Type は application/json にしてください。');
   try {
     const parsed = JSON.parse(text);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
