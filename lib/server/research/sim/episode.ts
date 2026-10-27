@@ -1,6 +1,6 @@
 import type { EpisodeResult, ExperimentSnapshot, JudgeResult, TradeDecision, UsageTotals } from '@/lib/research/types';
 import { invokeModel, type InvokeResult } from '../../llm/client';
-import { emptyTotals } from '../../storage/store';
+import { emptyTotals } from '../totals';
 import { addToTotals } from '../usage';
 import { applyDecision, generatePrices, parseDecision } from './market';
 import { judgeUserPrompt, parseJudge, tradingUserPrompt } from './prompts';

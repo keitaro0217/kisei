@@ -6,7 +6,7 @@ import { getAdapter } from '../llm/adapters';
 import { LlmError, toLlmError } from '../llm/errors';
 import type { ProviderRuntime } from '../llm/types';
 import { validateBaseUrl } from '../security/ssrf';
-import { getState, updateState, type ProviderRecord } from '../storage/store';
+import { countActiveExperimentsUsingProvider, getConfig, updateConfig, type ProviderRecord } from '../storage/store';
 
 export const PROVIDER_TYPES: ProviderType[] = ['openai', 'anthropic', 'gemini', 'openai_compatible', 'ollama'];
 
@@ -80,7 +80,7 @@ function parseModel(value: unknown): string | null {
 }
 
 export async function listProviders(): Promise<ProviderDTO[]> {
-  const state = await getState();
+  const state = await getConfig();
   return state.providers.map(toDTO);
 }
 
@@ -111,14 +111,14 @@ export async function createProvider(input: ProviderInput): Promise<ProviderDTO>
     createdAt: now,
     updatedAt: now,
   };
-  await updateState((s) => {
+  await updateConfig((s) => {
     s.providers.push(record);
   });
   return toDTO(record);
 }
 
 export async function updateProvider(id: string, input: ProviderInput): Promise<ProviderDTO> {
-  return updateState((s) => {
+  return updateConfig((s) => {
     const record = s.providers.find((p) => p.id === id);
     if (!record) throw new ValidationError('プロバイダーが見つかりません。');
     if (input.name !== undefined) {
@@ -153,13 +153,10 @@ export async function updateProvider(id: string, input: ProviderInput): Promise<
 }
 
 export async function deleteProvider(id: string): Promise<void> {
-  await updateState((s) => {
-    const inUse = s.experiments.some(
-      (e) =>
-        ['running', 'pausing', 'queued', 'stopping'].includes(e.status) &&
-        (e.snapshot.roles.trading_agent.providerId === id || e.snapshot.roles.llm_judge?.providerId === id),
-    );
-    if (inUse) throw new ValidationError('実行中の実験で使用されているため削除できません。実験を停止してから削除してください。');
+  if ((await countActiveExperimentsUsingProvider(id)) > 0) {
+    throw new ValidationError('実行中の実験で使用されているため削除できません。実験を停止してから削除してください。');
+  }
+  await updateConfig((s) => {
     const before = s.providers.length;
     s.providers = s.providers.filter((p) => p.id !== id);
     if (s.providers.length === before) throw new ValidationError('プロバイダーが見つかりません。');
@@ -178,7 +175,7 @@ export async function setApiKey(id: string, apiKey: unknown): Promise<ProviderDT
     throw new ValidationError('APIキーの形式が正しくありません（空白を含まない8文字以上）。', 'apiKey');
   }
   const key = apiKey.trim();
-  return updateState((s) => {
+  return updateConfig((s) => {
     const record = s.providers.find((p) => p.id === id);
     if (!record) throw new ValidationError('プロバイダーが見つかりません。');
     record.encryptedApiKey = encryptSecret(key, record.id);
@@ -191,7 +188,7 @@ export async function setApiKey(id: string, apiKey: unknown): Promise<ProviderDT
 }
 
 export async function deleteApiKey(id: string): Promise<ProviderDTO> {
-  return updateState((s) => {
+  return updateConfig((s) => {
     const record = s.providers.find((p) => p.id === id);
     if (!record) throw new ValidationError('プロバイダーが見つかりません。');
     record.encryptedApiKey = null;
@@ -204,7 +201,7 @@ export async function deleteApiKey(id: string): Promise<ProviderDTO> {
 }
 
 export async function getProviderRecord(id: string): Promise<ProviderRecord | null> {
-  const state = await getState();
+  const state = await getConfig();
   return state.providers.find((p) => p.id === id) ?? null;
 }
 
@@ -234,7 +231,7 @@ export async function fetchModels(id: string): Promise<ModelInfo[]> {
   } catch (e) {
     throw toLlmError(e, [rt.apiKey]);
   }
-  await updateState((s) => {
+  await updateConfig((s) => {
     const r = s.providers.find((p) => p.id === id);
     if (r) {
       r.models = models;
@@ -245,7 +242,7 @@ export async function fetchModels(id: string): Promise<ModelInfo[]> {
 }
 
 export async function setConnection(id: string, connection: ProviderConnection): Promise<void> {
-  await updateState((s) => {
+  await updateConfig((s) => {
     const r = s.providers.find((p) => p.id === id);
     if (r) r.connection = connection;
   });

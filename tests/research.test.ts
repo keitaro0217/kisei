@@ -1,5 +1,3 @@
-import { readFileSync, readdirSync } from 'node:fs';
-import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupEnv, startMockLlm, type MockLlm } from './helpers';
 
@@ -8,17 +6,22 @@ const KEY = 'sk-test-valid-key-1234';
 const actor = { id: 'basic:researcher', displayName: 'researcher', tenantId: 'default', permissions: [], authMethod: 'basic' as const };
 
 beforeAll(async () => {
-  setupEnv();
+  await setupEnv();
   mock = await startMockLlm();
   process.env.LLM_ALLOWED_PRIVATE_HOSTS = `127.0.0.1:${mock.port}`;
 });
 afterAll(async () => mock.close());
 
-function allDataFiles(): string {
-  const dir = process.env.RESEARCH_DATA_DIR!;
-  const read = (d: string): string[] =>
-    readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? read(path.join(d, e.name)) : [readFileSync(path.join(d, e.name), 'utf8')]));
-  return read(dir).join('\n');
+/** データベースに保存されている全データ（設定・実験・使用量・監査ログ）をテキストとして取り出す */
+async function allStoredData(): Promise<string> {
+  const { getDb } = await import('@/lib/server/db');
+  const db = await getDb();
+  const parts: string[] = [];
+  for (const table of ['rc_config', 'rc_experiments', 'rc_episodes', 'rc_usage_monthly', 'rc_usage_records', 'rc_audit']) {
+    const rows = await db.query<{ t: string }>(`SELECT t::text AS t FROM ${table} t`);
+    parts.push(...rows.map((r) => r.t));
+  }
+  return parts.join('\n');
 }
 
 describe('API連携と実験', () => {
@@ -33,7 +36,7 @@ describe('API連携と実験', () => {
     expect(updated.hasApiKey).toBe(true);
     expect(updated.apiKeyMasked).toBe('sk-••••••••1234');
     expect(JSON.stringify(await listProviders())).not.toContain(KEY);
-    expect(allDataFiles()).not.toContain(KEY);
+    expect(await allStoredData()).not.toContain(KEY);
   });
 
   it('許可されていないプライベートアドレスは登録時に拒否する', async () => {
@@ -143,7 +146,7 @@ describe('API連携と実験', () => {
   });
 
   it('APIキーがデータファイル・使用履歴・監査ログに含まれない', async () => {
-    expect(allDataFiles()).not.toContain(KEY);
-    expect(allDataFiles()).not.toContain('sk-wrong-key-999999');
+    expect(await allStoredData()).not.toContain(KEY);
+    expect(await allStoredData()).not.toContain('sk-wrong-key-999999');
   });
 });

@@ -3,7 +3,7 @@ import type { ConnectionTestResult, ConnectionTestStep, ModelInfo } from '@/lib/
 import { getAdapter } from '../llm/adapters';
 import { invokeModel } from '../llm/client';
 import { LlmError, toLlmError } from '../llm/errors';
-import { getState, updateState } from '../storage/store';
+import { getConfig, updateConfig } from '../storage/store';
 import { getProviderRecord, runtimeFor, ValidationError } from './providers';
 
 const LABELS: Record<ConnectionTestStep['key'], string> = {
@@ -30,7 +30,7 @@ export async function runConnectionTest(providerId: string, requestedModel?: str
   }));
   const step = (key: ConnectionTestStep['key']) => steps.find((s) => s.key === key)!;
 
-  const state = await getState();
+  const state = await getConfig();
   const model =
     requestedModel?.trim() ||
     record.defaultModel ||
@@ -47,7 +47,7 @@ export async function runConnectionTest(providerId: string, requestedModel?: str
       message: error ? `${errorCategoryLabels[error.category]}: ${error.message}` : '接続テストに成功しました。',
       latencyMs,
     };
-    await updateState((s) => {
+    await updateConfig((s) => {
       const r = s.providers.find((p) => p.id === providerId);
       // テスト中にAPIキーや接続先が変更された場合は結果を反映しない
       if (!r || r.baseUrl !== fingerprint.baseUrl || r.apiKeyUpdatedAt !== fingerprint.apiKeyUpdatedAt) return;
@@ -82,7 +82,7 @@ export async function runConnectionTest(providerId: string, requestedModel?: str
     models = await getAdapter(record.type).listModels(rt);
     step('network').status = 'ok';
     step('network').message = `接続できました（モデル ${models.length} 件を取得）`;
-    await updateState((s) => {
+    await updateConfig((s) => {
       const r = s.providers.find((p) => p.id === providerId);
       if (r && r.baseUrl === fingerprint.baseUrl) {
         r.models = models!;

@@ -28,6 +28,12 @@ export function proxy(request: NextRequest) {
     return NextResponse.json({ error: { code: 'https_required', message: 'HTTPSでアクセスしてください。' } }, { status: 403 });
   }
 
+  // 実験ワーカーは Vercel Cron などから Bearer トークン（CRON_SECRET）で呼ばれる。
+  // トークンの検証はワーカーの Route Handler 側で定数時間比較により行う。
+  if (request.nextUrl.pathname === '/api/research/worker' && request.headers.get('authorization')?.startsWith('Bearer ')) {
+    return NextResponse.next();
+  }
+
   const result = authenticateHeaders(request.headers);
   if (!result.ok) {
     return unauthorizedResponse(result);

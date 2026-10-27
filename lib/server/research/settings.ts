@@ -1,6 +1,6 @@
 import { reasoningSupport, researchRoles } from '@/lib/research/labels';
 import type { AppSettings, ModelPrice, ReasoningEffort, ReasoningSettings, ResearchRole, RoleAssignment } from '@/lib/research/types';
-import { getState, updateState } from '../storage/store';
+import { getConfig, updateConfig } from '../storage/store';
 import { ValidationError } from './providers';
 
 const EFFORTS: ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -29,7 +29,7 @@ function isValidTimeZone(tz: string): boolean {
 }
 
 export async function getSettings(): Promise<AppSettings> {
-  return (await getState()).settings;
+  return (await getConfig()).settings;
 }
 
 type SettingsPatch = {
@@ -75,21 +75,21 @@ export async function updateSettings(patch: SettingsPatch): Promise<AppSettings>
       next.cost.globalMonthlyBudgetUsd = money(patch.cost.globalMonthlyBudgetUsd, '全体の月間予算', 'globalMonthlyBudgetUsd');
     }
   }
-  return updateState((s) => {
+  return updateConfig((s) => {
     s.settings = next;
     return next;
   });
 }
 
 export async function getRoles(): Promise<Record<ResearchRole, RoleAssignment>> {
-  return (await getState()).roles;
+  return (await getConfig()).roles;
 }
 
 type RolePatch = { providerId?: unknown; model?: unknown; reasoning?: unknown; maxOutputTokens?: unknown };
 
 export async function updateRole(role: string, patch: RolePatch): Promise<RoleAssignment> {
   if (!researchRoles.includes(role as ResearchRole)) throw new ValidationError('役割が正しくありません。');
-  const state = await getState();
+  const state = await getConfig();
   const providerId = patch.providerId === '' || patch.providerId === null ? null : patch.providerId;
   const provider = typeof providerId === 'string' ? state.providers.find((p) => p.id === providerId) : null;
   if (providerId !== null && providerId !== undefined && !provider) throw new ValidationError('プロバイダーが見つかりません。', 'providerId');
@@ -121,7 +121,7 @@ export async function updateRole(role: string, patch: RolePatch): Promise<RoleAs
     }
   }
 
-  return updateState((s) => {
+  return updateConfig((s) => {
     const current = s.roles[role as ResearchRole];
     if (providerId !== undefined) {
       if (providerId !== current.providerId) current.reasoning = {};
@@ -136,11 +136,11 @@ export async function updateRole(role: string, patch: RolePatch): Promise<RoleAs
 }
 
 export async function listPrices(): Promise<ModelPrice[]> {
-  return (await getState()).prices;
+  return (await getConfig()).prices;
 }
 
 export async function upsertPrice(input: Record<string, unknown>): Promise<ModelPrice> {
-  const state = await getState();
+  const state = await getConfig();
   const providerId = typeof input.providerId === 'string' ? input.providerId : '';
   if (!state.providers.some((p) => p.id === providerId)) throw new ValidationError('プロバイダーを選択してください。', 'providerId');
   const model = typeof input.model === 'string' ? input.model.trim() : '';
@@ -165,7 +165,7 @@ export async function upsertPrice(input: Record<string, unknown>): Promise<Model
     source,
     updatedAt: new Date().toISOString(),
   };
-  return updateState((s) => {
+  return updateConfig((s) => {
     s.prices = s.prices.filter((p) => !(p.providerId === providerId && p.model === model));
     s.prices.push(price);
     return price;
@@ -173,7 +173,7 @@ export async function upsertPrice(input: Record<string, unknown>): Promise<Model
 }
 
 export async function deletePrice(providerId: string, model: string): Promise<void> {
-  await updateState((s) => {
+  await updateConfig((s) => {
     s.prices = s.prices.filter((p) => !(p.providerId === providerId && p.model === model));
   });
 }

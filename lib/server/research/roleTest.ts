@@ -2,7 +2,7 @@ import { roleLabels } from '@/lib/research/labels';
 import type { ResearchRole } from '@/lib/research/types';
 import { invokeModel } from '../llm/client';
 import { LlmError } from '../llm/errors';
-import { getState } from '../storage/store';
+import { getConfig } from '../storage/store';
 import { buildRuleDocument } from './sim/market';
 
 // 役割ごとの割り当て確認用に、その役割らしい小さなタスクを1回実行する。
@@ -26,7 +26,7 @@ const TASKS: Record<ResearchRole, { system: string; user: (doc: string) => strin
 };
 
 export async function runRoleTest(role: ResearchRole) {
-  const state = await getState();
+  const state = await getConfig();
   const assignment = state.roles[role];
   if (!assignment.providerId || !assignment.model) {
     throw new LlmError('not_configured', `「${roleLabels[role].label}」のプロバイダーとモデルを設定してください。`);

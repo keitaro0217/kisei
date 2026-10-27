@@ -2,11 +2,11 @@ import { createHash } from 'node:crypto';
 import { apiKeyRequired, roleLabels } from '@/lib/research/labels';
 import type { ExperimentSnapshot, MarketConfig, ResearchRole, RoleSnapshot } from '@/lib/research/types';
 import { LlmError } from '../llm/errors';
-import { getState, type State } from '../storage/store';
+import { getConfig, type Config } from '../storage/store';
 import { buildRuleDocument, RULE_DOCUMENT_VERSION } from './sim/market';
 import { DECISION_FORMAT, JUDGE_SYSTEM, PROMPT_VERSION, TOOL_VERSION, TRADING_AGENT_SYSTEM } from './sim/prompts';
 
-function roleSnapshot(state: State, role: ResearchRole): RoleSnapshot {
+function roleSnapshot(state: Config, role: ResearchRole): RoleSnapshot {
   const assignment = state.roles[role];
   const label = roleLabels[role].label;
   if (!assignment.providerId || !assignment.model) {
@@ -30,7 +30,7 @@ function roleSnapshot(state: State, role: ResearchRole): RoleSnapshot {
 
 /** 実験開始時点のモデル設定・プロンプト・ツール構成を固定する（APIキーは含めない） */
 export async function buildSnapshot(market: MarketConfig, judgeEnabled: boolean): Promise<ExperimentSnapshot> {
-  const state = await getState();
+  const state = await getConfig();
   const trading = roleSnapshot(state, 'trading_agent');
   const judge = judgeEnabled ? roleSnapshot(state, 'llm_judge') : null;
   const tradingProvider = state.providers.find((p) => p.id === trading.providerId)!;

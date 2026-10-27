@@ -1,11 +1,11 @@
 import type { SecurityStatus } from '@/lib/research/types';
 import { getBasicAuthConfig, getAllowedPrivateHosts, getEgressProxyUrl, isProduction } from '../env';
 import { isEncryptionConfigured } from '../crypto/secretBox';
-import { getState } from '../storage/store';
+import { getConfig } from '../storage/store';
 
 export async function getSecurityStatus(): Promise<SecurityStatus> {
   const basic = getBasicAuthConfig();
-  const state = await getState();
+  const state = await getConfig();
   return {
     basicAuth: {
       enabled: Boolean(basic),

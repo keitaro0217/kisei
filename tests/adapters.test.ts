@@ -3,7 +3,7 @@ import { setupEnv, startMockLlm, type MockLlm } from './helpers';
 
 let mock: MockLlm;
 beforeAll(async () => {
-  setupEnv();
+  await setupEnv();
   mock = await startMockLlm();
   process.env.LLM_ALLOWED_PRIVATE_HOSTS = `127.0.0.1:${mock.port}`;
 });

@@ -67,11 +67,44 @@ Next.js 16 を使用しています。`middleware` は `proxy.ts` に名称変�
 
 ### データ保存
 
-`RESEARCH_DATA_DIR`（既定 `.data/research`、Git管理外）に JSON / JSONL で保存します。単一サーバーでの運用を前提としており、Vercel のようなファイルシステムが永続化されない環境では、`lib/server/storage/store.ts` をデータベース実装に差し替えてください。
+研究データ（設定・暗号化済みAPIキー・実験・エピソード・使用量・監査ログ）は PostgreSQL に保存します。
+
+- `DATABASE_URL`（または `POSTGRES_URL`）が設定されていれば、その PostgreSQL に接続します。
+- 未設定ならローカル開発用に、組み込み Postgres（PGlite）を `RESEARCH_DATA_DIR`（既定 `.data/research`、Git管理外）に保存して使います。
+- テーブルは初回接続時に自動で作成します（`lib/server/db/schema.ts`）。
+
+### 実験の実行方式
+
+サーバーレス環境でも大量エピソードを実行できるよう、実験は「スライス」単位で処理します。
+
+- 1回のスライスは時間予算（`RESEARCH_SLICE_SECONDS`、既定200秒）内でエピソードを処理し、残りは次のスライスに引き継ぎます。
+- 実験ごとにデータベース上のリース（担当権）を取るため、複数のインスタンスが同じ実験を同時に処理することはありません。
+- 処理中のインスタンスが止まっても、リースの期限（90秒）が切れた後に次のスライスが続きから再開します。
+  保存前に中断したエピソードは最初からやり直すため、その分のAPI呼び出しは追加で発生します。エピソードの結果が二重に保存されることはありません。
+- 一時停止・停止の要求は、処理中のインスタンスがデータベースを定期的に確認して反映します。
+
+## Vercel へのデプロイ
+
+1. Vercel のプロジェクトに、Marketplace から PostgreSQL（Neon など）を追加します。`DATABASE_URL` が自動で設定されます。
+2. 次の環境変数を設定します。値は `.env.local.example` を参照してください。
+   - `BASIC_AUTH_USERNAME`
+   - `BASIC_AUTH_PASSWORD`
+   - `API_KEY_ENCRYPTION_KEY`
+   - `CRON_SECRET`（16文字以上）
+   - Vercel では `DATABASE_URL` と `CRON_SECRET` が未設定だと起動しません。
+3. デプロイします。実験の処理は次の仕組みで進みます。
+   - 実験の開始・再開や画面の表示の後に、`after()` で関数の最大実行時間（300秒）の範囲内で処理します。
+   - 処理が残っていれば、`/api/research/worker` を `CRON_SECRET` 付きで呼び出し、次の関数実行に引き継ぎます。
+   - `vercel.json` の Cron が `/api/research/worker` を定期的に呼び、引き継ぎが途切れた場合も再開します。
+     Hobby プランでは Cron は1日1回までのため、既定は1日1回です。Pro プランでは `"*/5 * * * *"` などに短くすると、復旧までの時間が短くなります。
+   - 実験詳細の画面を開いている間も、処理が止まっていれば自動で再開します。
+
+> プレビュー環境で「Vercel Authentication（デプロイ保護）」が有効だと、ワーカーの自己呼び出しが保護画面で止まります。その場合も Cron と画面表示による再開で処理は進みます。
 
 ### テスト
 
 ```bash
-npm test                       # 単体・結合テスト（モックLLMサーバーを使用）
+npm test                       # 単体・結合テスト（モックLLMサーバー・組み込み Postgres を使用）
+TEST_DATABASE_URL=postgresql://postgres@localhost:5432/postgres npm test   # 実際の PostgreSQL で実行（テストごとにDBを作成）
 REAL_API_TEST=1 npm test       # 実際のAPIへの疎通確認（ANTHROPIC_TEST_KEY 等を設定すると実キーで確認）
 ```

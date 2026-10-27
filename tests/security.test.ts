@@ -1,7 +1,9 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { setupEnv } from './helpers';
 
-beforeAll(() => setupEnv());
+beforeAll(async () => {
+  await setupEnv();
+});
 
 describe('Basic認証', () => {
   it('正しい認証情報のみ受け付け、失敗時は401とWWW-Authenticateを返す', async () => {

@@ -31,6 +31,23 @@ export function getDataDir(): string {
 }
 
 /**
+ * PostgreSQL の接続文字列。Vercel の Neon 連携などが設定する DATABASE_URL / POSTGRES_URL を使う。
+ * 未設定ならローカル用の組み込み Postgres（PGlite）を使う。
+ */
+export function getDatabaseUrl(): string | null {
+  return process.env.DATABASE_URL || process.env.POSTGRES_URL || null;
+}
+
+/** Vercel 上で動作しているか（ファイルシステムが永続化されず、処理はリクエスト単位で終了する） */
+export const isVercel = () => process.env.VERCEL === '1';
+
+/** 実験ワーカー（Vercel Cron・自己呼び出し）を認証するための共有シークレット */
+export function getCronSecret(): string | null {
+  const secret = process.env.CRON_SECRET;
+  return secret && secret.length >= 16 ? secret : null;
+}
+
+/**
  * プライベートネットワーク上でも接続を許可するホスト（host または host:port）。
  * ローカルLLM（Ollama）や社内ゲートウェイ用。既定は空（すべて拒否）。
  */
@@ -68,6 +85,13 @@ export function validateRequiredEnv(): EnvProblem[] {
     problems.push({ variable: 'API_KEY_ENCRYPTION_KEY', problem: '未設定です' });
   } else if (!getEncryptionKey()) {
     problems.push({ variable: 'API_KEY_ENCRYPTION_KEY', problem: '32バイト（base64 または 16進数64文字）で指定してください' });
+  }
+  if (isVercel()) {
+    // Vercel ではローカルファイルが永続化されないため、データベースと実験ワーカー用のシークレットが必須
+    if (!getDatabaseUrl()) problems.push({ variable: 'DATABASE_URL', problem: 'Vercel では PostgreSQL の接続文字列が必須です' });
+    if (!getCronSecret()) problems.push({ variable: 'CRON_SECRET', problem: 'Vercel では16文字以上のランダムな値が必須です' });
+  } else if (process.env.CRON_SECRET && !getCronSecret()) {
+    problems.push({ variable: 'CRON_SECRET', problem: '16文字以上にしてください' });
   }
   if (process.env.LLM_EGRESS_PROXY_URL && !getEgressProxyUrl()) {
     problems.push({ variable: 'LLM_EGRESS_PROXY_URL', problem: 'http(s):// で始まるURLを指定してください' });
