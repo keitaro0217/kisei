@@ -1,9 +1,10 @@
 import { json, readJson, withAuth } from '@/lib/server/api';
 import { audit } from '@/lib/server/audit';
+import { isEncryptionConfigured } from '@/lib/server/crypto/secretBox';
 import { createProvider, listProviders } from '@/lib/server/research/providers';
 
 export async function GET(request: Request) {
-  return withAuth(request, 'settings:read', async () => json({ providers: await listProviders() }));
+  return withAuth(request, 'settings:read', async () => json({ providers: await listProviders(), encryptionConfigured: isEncryptionConfigured() }));
 }
 
 export async function POST(request: Request) {

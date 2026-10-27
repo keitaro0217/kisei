@@ -47,6 +47,27 @@ describe('Basic認証', () => {
   });
 });
 
+describe('任意の環境変数', () => {
+  it('API_KEY_ENCRYPTION_KEY と CRON_SECRET は未設定でも問題にしないが、設定されていれば形式を検証する', async () => {
+    const { validateRequiredEnv } = await import('@/lib/server/env');
+    const saved = { key: process.env.API_KEY_ENCRYPTION_KEY, cron: process.env.CRON_SECRET, vercel: process.env.VERCEL, db: process.env.DATABASE_URL };
+    delete process.env.API_KEY_ENCRYPTION_KEY;
+    delete process.env.CRON_SECRET;
+    process.env.VERCEL = '1';
+    process.env.DATABASE_URL = 'postgresql://u:p@db.example.com/db';
+    expect(validateRequiredEnv()).toEqual([]);
+    process.env.API_KEY_ENCRYPTION_KEY = 'too-short';
+    process.env.CRON_SECRET = 'short';
+    expect(validateRequiredEnv().map((p) => p.variable).sort()).toEqual(['API_KEY_ENCRYPTION_KEY', 'CRON_SECRET']);
+    delete process.env.DATABASE_URL;
+    expect(validateRequiredEnv().map((p) => p.variable)).toContain('DATABASE_URL');
+    for (const [k, v] of Object.entries({ API_KEY_ENCRYPTION_KEY: saved.key, CRON_SECRET: saved.cron, VERCEL: saved.vercel, DATABASE_URL: saved.db })) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
+});
+
 describe('APIキー暗号化', () => {
   it('AES-256-GCMで暗号化し、改ざんや別IDでは復号できない', async () => {
     const { encryptSecret, decryptSecret, maskSecret } = await import('@/lib/server/crypto/secretBox');

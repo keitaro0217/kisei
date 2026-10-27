@@ -46,8 +46,8 @@ export default function SecurityPage() {
         </Alert>
       )}
       {!s.encryption.configured && (
-        <Alert kind="error" title="APIキー暗号化キーが未設定です">
-          環境変数 API_KEY_ENCRYPTION_KEY（32バイト）を設定するまで、APIキーを登録できません。
+        <Alert kind="warning" title="APIキー暗号化キーが未設定です">
+          API連携を使う前に、環境変数 API_KEY_ENCRYPTION_KEY（32バイト）を設定してください。設定するまでAPIキーは登録できません。
         </Alert>
       )}
       <Card title="アクセス制御">

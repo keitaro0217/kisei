@@ -7,7 +7,7 @@
 
 ```bash
 npm ci
-cp .env.local.example .env.local   # BASIC_AUTH_PASSWORD / API_KEY_ENCRYPTION_KEY を設定
+cp .env.local.example .env.local   # BASIC_AUTH_PASSWORD（API連携を使うなら API_KEY_ENCRYPTION_KEY も）を設定
 npm run dev                        # http://localhost:3000/research
 npm test
 ```
@@ -28,9 +28,9 @@ Next.js 16 を使用しています。`middleware` は `proxy.ts` に名称変�
 | 変数 | 説明 |
 |---|---|
 | `BASIC_AUTH_PASSWORD` | パスワード（必須・12文字以上） |
-| `API_KEY_ENCRYPTION_KEY` | APIキー暗号化用の32バイト鍵（必須） |
+| `API_KEY_ENCRYPTION_KEY` | APIキー暗号化用の32バイト鍵（API連携を使うときに必須。未設定でも起動はでき、APIキーの登録のみ不可） |
 
-本番環境でこれらが未設定・不正な場合、`instrumentation.ts` がサーバーの起動を中止します（値は出力しません）。
+本番環境で必須の値が未設定・不正な場合、サーバーの起動を中止します（Vercel ではログイン後に問題のある変数名を表示します。値は出力しません）。
 開発環境で未設定の場合のみ認証なしで動作し、セキュリティ画面に警告を表示します。
 `.env.local.example` を参考に `.env.local`（Git管理外）またはホスティング環境の環境変数に設定してください。
 
@@ -87,10 +87,10 @@ Next.js 16 を使用しています。`middleware` は `proxy.ts` に名称変�
 
 1. Vercel のプロジェクトに、Marketplace から PostgreSQL（Neon など）を追加します。`DATABASE_URL` が自動で設定されます。
 2. 次の環境変数を設定します。値は `.env.local.example` を参照してください。
-   - `BASIC_AUTH_PASSWORD`
-   - `API_KEY_ENCRYPTION_KEY`
-   - `CRON_SECRET`（16文字以上）
-   - Vercel では `DATABASE_URL` と `CRON_SECRET` が未設定だと起動しません。
+   - `BASIC_AUTH_PASSWORD`（必須）
+   - `API_KEY_ENCRYPTION_KEY`（API連携を使うときに設定）
+   - `CRON_SECRET`（任意・16文字以上。未設定なら実験は実験画面を開いている間だけ進みます）
+   - `BASIC_AUTH_PASSWORD` と `DATABASE_URL` に問題がある場合、アプリは利用できず、ログイン後に問題のある変数名を表示します。
 3. デプロイします。実験の処理は次の仕組みで進みます。
    - 実験の開始・再開や画面の表示の後に、`after()` で関数の最大実行時間（300秒）の範囲内で処理します。
    - 処理が残っていれば、`/api/research/worker` を `CRON_SECRET` 付きで呼び出し、次の関数実行に引き継ぎます。
