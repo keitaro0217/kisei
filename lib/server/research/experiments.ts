@@ -22,6 +22,8 @@ import {
 } from '../storage/store';
 import { getProviderRecord, ValidationError } from './providers';
 import { runEpisode } from './sim/episode';
+import { runPendingStudyWork } from './study/studies';
+import { listStudiesNeedingWork } from '../storage/studyStore';
 import { buildSnapshot, versionHashOf } from './snapshot';
 import { assertPricedWhenBudgeted, assertWithinBudget } from './usage';
 
@@ -336,6 +338,12 @@ export async function runPendingWork(budgetMs: number): Promise<boolean> {
     }
   }
   if (!more) more = (await listExperimentsNeedingWork(1)).some((id) => !seen.has(id));
+  // 多条件の研究（Study）も同じワーカーで処理する
+  if (Date.now() < deadline) {
+    if (await runPendingStudyWork(deadline)) more = true;
+  } else if ((await listStudiesNeedingWork(1)).length > 0) {
+    more = true;
+  }
   return more;
 }
 
