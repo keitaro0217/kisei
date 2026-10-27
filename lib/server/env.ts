@@ -3,13 +3,13 @@
 
 export const isProduction = () => process.env.NODE_ENV === 'production';
 
-export type BasicAuthConfig = { username: string; password: string };
+/** Basic認証はパスワードのみで照合する（ユーザー名は使わない） */
+export type BasicAuthConfig = { password: string };
 
 export function getBasicAuthConfig(): BasicAuthConfig | null {
-  const username = process.env.BASIC_AUTH_USERNAME;
   const password = process.env.BASIC_AUTH_PASSWORD;
-  if (!username || !password) return null;
-  return { username, password };
+  if (!password) return null;
+  return { password };
 }
 
 /** AES-256-GCM 用の32バイト鍵。base64 または 64文字の16進数で指定する。 */
@@ -75,7 +75,6 @@ export type EnvProblem = { variable: string; problem: string };
 /** 本番環境で必須の環境変数を検証する。値そのものは返さない。 */
 export function validateRequiredEnv(): EnvProblem[] {
   const problems: EnvProblem[] = [];
-  if (!process.env.BASIC_AUTH_USERNAME) problems.push({ variable: 'BASIC_AUTH_USERNAME', problem: '未設定です' });
   if (!process.env.BASIC_AUTH_PASSWORD) {
     problems.push({ variable: 'BASIC_AUTH_PASSWORD', problem: '未設定です' });
   } else if (process.env.BASIC_AUTH_PASSWORD.length < 12) {

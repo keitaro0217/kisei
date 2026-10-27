@@ -6,13 +6,15 @@ beforeAll(async () => {
 });
 
 describe('Basic認証', () => {
-  it('正しい認証情報のみ受け付け、失敗時は401とWWW-Authenticateを返す', async () => {
+  it('パスワードのみで認証し、ユーザー名は空欄でも任意でもよい。失敗時は401とWWW-Authenticateを返す', async () => {
     const { requireAuth } = await import('@/lib/server/auth');
-    const ok = new Request('https://x/api', { headers: { authorization: `Basic ${Buffer.from('researcher:correct-horse-battery').toString('base64')}` } });
-    const principal = requireAuth(ok, 'settings:read');
-    expect(principal).not.toBeInstanceOf(Response);
+    const basic = (user: string, pass: string) => `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`;
+    for (const user of ['', 'anyone', 'researcher']) {
+      const principal = requireAuth(new Request('https://x/api', { headers: { authorization: basic(user, 'correct-horse-battery') } }), 'settings:read');
+      expect(principal).not.toBeInstanceOf(Response);
+    }
 
-    for (const header of [undefined, `Basic ${Buffer.from('researcher:wrong').toString('base64')}`, 'Bearer abc', 'Basic !!!']) {
+    for (const header of [undefined, basic('', 'wrong'), basic('researcher', 'wrong'), basic('', ''), 'Bearer abc', 'Basic !!!']) {
       const res = requireAuth(new Request('https://x/api', { headers: header ? { authorization: header } : {} }), 'settings:read');
       expect(res).toBeInstanceOf(Response);
       expect((res as Response).status).toBe(401);
@@ -27,11 +29,11 @@ describe('Basic認証', () => {
 
   it('本番環境で認証情報が未設定なら503（fail closed）', async () => {
     const { authenticateHeaders } = await import('@/lib/server/auth');
-    const saved = { u: process.env.BASIC_AUTH_USERNAME, env: process.env.NODE_ENV };
-    delete process.env.BASIC_AUTH_USERNAME;
+    const saved = { p: process.env.BASIC_AUTH_PASSWORD, env: process.env.NODE_ENV };
+    delete process.env.BASIC_AUTH_PASSWORD;
     (process.env as Record<string, string>).NODE_ENV = 'production';
     expect(authenticateHeaders(new Headers())).toEqual({ ok: false, reason: 'misconfigured' });
-    process.env.BASIC_AUTH_USERNAME = saved.u;
+    process.env.BASIC_AUTH_PASSWORD = saved.p;
     (process.env as Record<string, string | undefined>).NODE_ENV = saved.env;
   });
 

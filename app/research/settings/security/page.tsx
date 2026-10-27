@@ -42,7 +42,7 @@ export default function SecurityPage() {
       <PageHeader title="セキュリティ" description="アクセス制御とAPI認証情報の管理状況、監査ログを確認します。" />
       {!s.basicAuth.enabled && (
         <Alert kind="warning" title="Basic認証が無効です（開発モード）">
-          環境変数 BASIC_AUTH_USERNAME / BASIC_AUTH_PASSWORD が未設定です。本番環境では未設定のまま起動できません。
+          環境変数 BASIC_AUTH_PASSWORD が未設定です。本番環境では未設定のまま起動できません。
         </Alert>
       )}
       {!s.encryption.configured && (
@@ -53,8 +53,7 @@ export default function SecurityPage() {
       <Card title="アクセス制御">
         <div className="divide-y divide-ink-800">
           <Row label="Basic認証" value={<Badge className={s.basicAuth.enabled ? ok : warn}>{s.basicAuth.enabled ? '稼働中' : '無効（開発モード）'}</Badge>}>
-            画面・APIのすべてで認証を要求し、バックエンドの各エンドポイントでも再検証します。
-            {s.basicAuth.username && ` 利用者: ${s.basicAuth.username}`}
+            画面・APIのすべてでパスワードによる認証を要求し、バックエンドの各エンドポイントでも再検証します。
           </Row>
           <Row label="HTTPSの強制" value={<Badge className={s.basicAuth.httpsEnforced ? ok : warn}>{s.basicAuth.httpsEnforced ? '有効' : '開発環境のため無効'}</Badge>}>
             本番環境ではHTTPS以外のアクセスをリダイレクト・拒否し、HSTSを付与します。
