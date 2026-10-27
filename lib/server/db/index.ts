@@ -20,10 +20,29 @@ export interface Db extends Queryable {
   close(): Promise<void>;
 }
 
+/**
+ * libpq（psql など）専用で、postgres.js が解釈せずサーバーへそのまま送ってしまう接続パラメーター。
+ * 送るとサーバーが「unrecognized configuration parameter」で接続を拒否する。
+ * 例: Neon の接続文字列には channel_binding=require が付く。
+ */
+const LIBPQ_ONLY_PARAMS = ['channel_binding', 'gssencmode', 'sslnegotiation', 'sslcompression', 'sslcert', 'sslkey', 'sslrootcert', 'sslcrl', 'requirepeer', 'krbsrvname'];
+
+export function normalizeDatabaseUrl(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  for (const key of LIBPQ_ONLY_PARAMS) parsed.searchParams.delete(key);
+  return parsed.toString();
+}
+
 async function createPostgres(url: string): Promise<Db> {
   const { default: postgres } = await import('postgres');
   // サーバーレスでは同時接続数を抑え、PgBouncer（トランザクションモード）でも動くよう prepare を無効にする
-  const sql = postgres(url, { max: Number(process.env.DATABASE_POOL_MAX || 5), prepare: false, idle_timeout: 20, onnotice: () => {} });
+  // SSL は接続文字列の sslmode（Neon では require）に従う
+  const sql = postgres(normalizeDatabaseUrl(url), { max: Number(process.env.DATABASE_POOL_MAX || 5), prepare: false, idle_timeout: 20, onnotice: () => {} });
   const run = async <T extends Row>(client: { unsafe: typeof sql.unsafe }, text: string, params: unknown[] = []) =>
     (await client.unsafe(text, params as never[])) as unknown as T[];
   return {
