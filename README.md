@@ -7,7 +7,7 @@
 
 ```bash
 npm ci
-cp .env.local.example .env.local   # BASIC_AUTH_USERNAME / BASIC_AUTH_PASSWORD / API_KEY_ENCRYPTION_KEY を設定
+cp .env.local.example .env.local   # BASIC_AUTH_PASSWORD / API_KEY_ENCRYPTION_KEY を設定
 npm run dev                        # http://localhost:3000/research
 npm test
 ```
@@ -18,6 +18,7 @@ Next.js 16 を使用しています。`middleware` は `proxy.ts` に名称変�
 
 アプリ全体（研究コンソールの画面・すべての `/api`）に HTTP Basic 認証をかけています。
 
+- **パスワードのみ**で認証します。ブラウザに表示されるユーザー名の欄は空欄のままで構いません（入力しても無視されます）。
 - `proxy.ts` で全リクエストを検証し、さらに各 API Route Handler と研究コンソールのレイアウトでも再検証します（多層防御）。
 - 照合は SHA-256 ダイジェスト同士の `timingSafeEqual` による定数時間比較です。
 - 失敗時は `401` と `WWW-Authenticate: Basic realm="Research Console"` を返します。
@@ -26,7 +27,6 @@ Next.js 16 を使用しています。`middleware` は `proxy.ts` に名称変�
 
 | 変数 | 説明 |
 |---|---|
-| `BASIC_AUTH_USERNAME` | ユーザー名（必須） |
 | `BASIC_AUTH_PASSWORD` | パスワード（必須・12文字以上） |
 | `API_KEY_ENCRYPTION_KEY` | APIキー暗号化用の32バイト鍵（必須） |
 
@@ -87,7 +87,6 @@ Next.js 16 を使用しています。`middleware` は `proxy.ts` に名称変�
 
 1. Vercel のプロジェクトに、Marketplace から PostgreSQL（Neon など）を追加します。`DATABASE_URL` が自動で設定されます。
 2. 次の環境変数を設定します。値は `.env.local.example` を参照してください。
-   - `BASIC_AUTH_USERNAME`
    - `BASIC_AUTH_PASSWORD`
    - `API_KEY_ENCRYPTION_KEY`
    - `CRON_SECRET`（16文字以上）

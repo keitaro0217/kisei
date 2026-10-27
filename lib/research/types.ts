@@ -287,7 +287,7 @@ export type ConnectionTestResult = {
 };
 
 export type SecurityStatus = {
-  basicAuth: { enabled: boolean; mode: 'enforced' | 'disabled_dev'; httpsEnforced: boolean; username: string | null };
+  basicAuth: { enabled: boolean; mode: 'enforced' | 'disabled_dev'; httpsEnforced: boolean };
   encryption: { configured: boolean; algorithm: string };
   providers: { id: string; name: string; hasApiKey: boolean; apiKeyUpdatedAt: string | null }[];
   egressProxy: boolean;

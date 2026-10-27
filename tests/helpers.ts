@@ -13,7 +13,6 @@ import type { AddressInfo } from 'node:net';
 export async function setupEnv() {
   process.env.RESEARCH_DATA_DIR = mkdtempSync(path.join(os.tmpdir(), 'research-test-'));
   process.env.API_KEY_ENCRYPTION_KEY = randomBytes(32).toString('base64');
-  process.env.BASIC_AUTH_USERNAME = 'researcher';
   process.env.BASIC_AUTH_PASSWORD = 'correct-horse-battery';
   process.env.RESEARCH_WORKER_AUTOSTART = '0';
   delete process.env.POSTGRES_URL;

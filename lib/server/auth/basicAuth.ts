@@ -29,20 +29,19 @@ export function parseBasicAuthorization(header: string | null): { username: stri
 export class BasicAuthProvider implements AuthProvider {
   readonly name = 'basic';
 
-  constructor(private readonly config: { username: string; password: string }) {}
+  constructor(private readonly config: { password: string }) {}
 
   authenticate(headers: Headers): AuthResult {
     const credentials = parseBasicAuthorization(headers.get('authorization'));
     if (!credentials) return { ok: false, reason: 'missing' };
-    // ユーザー名とパスワードは両方とも必ず比較し、どちらが誤っているかを処理時間から推測させない
-    const userOk = safeEqual(credentials.username, this.config.username);
-    const passOk = safeEqual(credentials.password, this.config.password);
-    if (!(userOk && passOk)) return { ok: false, reason: 'invalid' };
+    // パスワードのみで照合する。ブラウザの入力欄のユーザー名は空欄でも何を入れてもよい
+    if (!safeEqual(credentials.password, this.config.password)) return { ok: false, reason: 'invalid' };
     return {
       ok: true,
       principal: {
-        id: `basic:${this.config.username}`,
-        displayName: this.config.username,
+        // 監査ログ用の識別子。パスワードのみの共有アカウントのため固定値とする
+        id: 'basic:shared',
+        displayName: '研究チーム',
         tenantId: 'default',
         permissions: ALL_PERMISSIONS,
         authMethod: 'basic',
