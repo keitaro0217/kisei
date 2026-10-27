@@ -468,10 +468,14 @@ export default function ApiIntegrationPage() {
   const [adding, setAdding] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [encryptionConfigured, setEncryptionConfigured] = useState(true);
 
   useEffect(() => {
-    api<{ providers: ProviderDTO[] }>('/providers')
-      .then((r) => setProviders(r.providers))
+    api<{ providers: ProviderDTO[]; encryptionConfigured: boolean }>('/providers')
+      .then((r) => {
+        setProviders(r.providers);
+        setEncryptionConfigured(r.encryptionConfigured);
+      })
       .catch((e) => setLoadError(e instanceof Error ? e.message : '読み込みに失敗しました'));
   }, []);
 
@@ -493,6 +497,14 @@ export default function ApiIntegrationPage() {
       />
       <NoticeBar notice={notice} onClose={() => setNotice(null)} />
       {loadError && <Alert kind="error" title="読み込みに失敗しました">{loadError}</Alert>}
+      {!encryptionConfigured && (
+        <div className="mb-4">
+          <Alert kind="warning" title="APIキーを登録するには準備が必要です">
+            APIキーを暗号化して保存するための環境変数 <code>API_KEY_ENCRYPTION_KEY</code>（32バイトのランダムな値）が設定されていません。
+            設定するまで、APIキーの登録と接続テストは利用できません（プロバイダーの追加と表示はできます）。
+          </Alert>
+        </div>
+      )}
       <div className="space-y-4">
         {adding && (
           <ProviderForm

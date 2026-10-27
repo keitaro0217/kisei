@@ -72,7 +72,11 @@ export function getEgressProxyUrl(): URL | null {
 
 export type EnvProblem = { variable: string; problem: string };
 
-/** 本番環境で必須の環境変数を検証する。値そのものは返さない。 */
+/**
+ * 本番環境で必須の環境変数を検証する。値そのものは返さない。
+ * API_KEY_ENCRYPTION_KEY と CRON_SECRET は任意（API連携・バックグラウンド実行を使うときに設定する）。
+ * ただし設定されている場合は形式を検証する。
+ */
 export function validateRequiredEnv(): EnvProblem[] {
   const problems: EnvProblem[] = [];
   if (!process.env.BASIC_AUTH_PASSWORD) {
@@ -80,16 +84,14 @@ export function validateRequiredEnv(): EnvProblem[] {
   } else if (process.env.BASIC_AUTH_PASSWORD.length < 12) {
     problems.push({ variable: 'BASIC_AUTH_PASSWORD', problem: '12文字以上にしてください' });
   }
-  if (!process.env.API_KEY_ENCRYPTION_KEY) {
-    problems.push({ variable: 'API_KEY_ENCRYPTION_KEY', problem: '未設定です' });
-  } else if (!getEncryptionKey()) {
+  if (process.env.API_KEY_ENCRYPTION_KEY && !getEncryptionKey()) {
     problems.push({ variable: 'API_KEY_ENCRYPTION_KEY', problem: '32バイト（base64 または 16進数64文字）で指定してください' });
   }
-  if (isVercel()) {
-    // Vercel ではローカルファイルが永続化されないため、データベースと実験ワーカー用のシークレットが必須
-    if (!getDatabaseUrl()) problems.push({ variable: 'DATABASE_URL', problem: 'Vercel では PostgreSQL の接続文字列が必須です' });
-    if (!getCronSecret()) problems.push({ variable: 'CRON_SECRET', problem: 'Vercel では16文字以上のランダムな値が必須です' });
-  } else if (process.env.CRON_SECRET && !getCronSecret()) {
+  // Vercel ではローカルファイルが永続化されないため、データベースが必須
+  if (isVercel() && !getDatabaseUrl()) {
+    problems.push({ variable: 'DATABASE_URL', problem: 'Vercel では PostgreSQL の接続文字列が必須です' });
+  }
+  if (process.env.CRON_SECRET && !getCronSecret()) {
     problems.push({ variable: 'CRON_SECRET', problem: '16文字以上にしてください' });
   }
   if (process.env.LLM_EGRESS_PROXY_URL && !getEgressProxyUrl()) {
