@@ -9,7 +9,7 @@ import { safeMessage } from './security/redact';
 // エラー応答・ログには秘密情報やリクエストヘッダーを含めない。
 
 export function apiError(status: number, code: string, message: string, extra?: Record<string, unknown>) {
-  return Response.json({ error: { code, message, ...extra } }, { status, headers: { 'Cache-Control': 'no-store' } });
+  return Response.json({ error: { code, message, ...extra } }, { status, headers: { 'Cache-Control': 'no-store', 'Content-Type': 'application/json; charset=utf-8' } });
 }
 
 export async function readJson(request: Request, maxBytes = 64 * 1024): Promise<Record<string, unknown>> {
@@ -29,7 +29,7 @@ export async function readJson(request: Request, maxBytes = 64 * 1024): Promise<
 }
 
 export function json(data: unknown, status = 200) {
-  return Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
+  return Response.json(data, { status, headers: { 'Cache-Control': 'no-store', 'Content-Type': 'application/json; charset=utf-8' } });
 }
 
 export async function withAuth(

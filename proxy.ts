@@ -30,7 +30,7 @@ export function proxy(request: NextRequest) {
       const url = new URL(`${request.nextUrl.pathname}${request.nextUrl.search}`, `https://${requestHostname(request)}`);
       return NextResponse.redirect(url, 308);
     }
-    return NextResponse.json({ error: { code: 'https_required', message: 'HTTPSでアクセスしてください。' } }, { status: 403 });
+    return NextResponse.json({ error: { code: 'https_required', message: 'HTTPSでアクセスしてください。' } }, { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
   }
 
   // 実験ワーカーは Vercel Cron などから Bearer トークン（CRON_SECRET）で呼ばれる。
@@ -41,7 +41,7 @@ export function proxy(request: NextRequest) {
 
   // 保存済みの認証情報を悪用した他サイトからの書き込み（CSRF）を拒否する
   if (isCrossSiteWrite(request.method, request.headers, requestHost(request))) {
-    return NextResponse.json({ error: { code: 'cross_site_request', message: '他のサイトからの操作は受け付けません。' } }, { status: 403 });
+    return NextResponse.json({ error: { code: 'cross_site_request', message: '他のサイトからの操作は受け付けません。' } }, { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
   }
 
   // パスワードの誤りが続いた接続元は一定時間拒否する（パスワードの照合も行わない）
@@ -50,7 +50,7 @@ export function proxy(request: NextRequest) {
   if (locked > 0) {
     return NextResponse.json(
       { error: { code: 'too_many_attempts', message: '認証の失敗が続いたため、しばらく時間をおいてから再度お試しください。' } },
-      { status: 429, headers: { 'Retry-After': String(Math.ceil(locked / 1000)), 'Cache-Control': 'no-store' } },
+      { status: 429, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': String(Math.ceil(locked / 1000)), 'Cache-Control': 'no-store' } },
     );
   }
 
@@ -58,7 +58,7 @@ export function proxy(request: NextRequest) {
   if (!result.ok) {
     // 認証情報なし（ブラウザの最初のリクエスト）は失敗として数えない
     if (result.reason === 'invalid') authFailureLimiter.recordFailure(client);
-    return unauthorizedResponse(result);
+    return unauthorizedResponse(result, request.headers);
   }
   authFailureLimiter.recordSuccess(client);
 
