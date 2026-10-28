@@ -11,7 +11,7 @@ export function configProblemsResponse(pathname: string, problems: EnvProblem[])
   if (pathname.startsWith('/api/')) {
     return Response.json(
       { error: { code: 'config_incomplete', message: '必須の環境変数が正しく設定されていません。', problems } },
-      { status: 503, headers },
+      { status: 503, headers: { ...headers, 'Content-Type': 'application/json; charset=utf-8' } },
     );
   }
   const items = problems.map((p) => `<li><code>${escapeHtml(p.variable)}</code>：${escapeHtml(p.problem)}</li>`).join('');

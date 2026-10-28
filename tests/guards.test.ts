@@ -59,6 +59,19 @@ describe('総当たり対策', () => {
     expect(proxy(req('correct-horse-battery', '198.51.100.7')).status).toBe(200);
   });
 
+  it('未認証の画面表示には UTF-8 の HTML、API には UTF-8 の JSON を返す（文字化けしない）', async () => {
+    const { proxy } = await import('@/proxy');
+    const { NextRequest } = await import('next/server');
+    const page = proxy(new NextRequest('http://localhost/research', { headers: { 'x-forwarded-for': '192.0.2.50', accept: 'text/html,application/xhtml+xml' } }));
+    expect(page.status).toBe(401);
+    expect(page.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    expect(page.headers.get('www-authenticate')).toMatch(/^Basic /);
+    expect(await page.text()).toContain('ログインが必要です');
+    const apiRes = proxy(new NextRequest('http://localhost/api/research/studies', { headers: { 'x-forwarded-for': '192.0.2.51', accept: '*/*' } }));
+    expect(apiRes.status).toBe(401);
+    expect(apiRes.headers.get('content-type')).toBe('application/json; charset=utf-8');
+  });
+
   it('proxy は他サイトからの POST を 403 で拒否する', async () => {
     const { proxy } = await import('@/proxy');
     const { NextRequest } = await import('next/server');
