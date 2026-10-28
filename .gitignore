@@ -43,3 +43,6 @@ next-env.d.ts
 
 # research data (encrypted API keys, usage logs, experiment results)
 /.data/
+
+# E2E の出力
+e2e-output/
