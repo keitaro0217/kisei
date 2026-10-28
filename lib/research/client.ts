@@ -33,7 +33,11 @@ export async function api<T>(path: string, init?: { method?: string; body?: unkn
   }
   if (!res.ok) {
     const err = (data as { error?: { code?: string; message?: string; label?: string; field?: string } } | null)?.error;
-    if (res.status === 401) throw new ApiError(401, 'unauthorized', '認証の有効期限が切れました。ページを再読み込みしてください。');
+    if (res.status === 401) {
+      // ログインの有効期限が切れた場合はログイン画面へ移動する
+      window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+      throw new ApiError(401, 'unauthorized', 'ログインの有効期限が切れました。ログインし直してください。');
+    }
     throw new ApiError(res.status, err?.code ?? 'error', err?.message ?? `エラーが発生しました（${res.status}）`, err?.label, err?.field);
   }
   return data as T;

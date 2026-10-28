@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import ResearchShell from '@/components/research/ResearchShell';
 import { authenticateHeaders } from '@/lib/server/auth';
 import { getDatabaseUrl } from '@/lib/server/env';
@@ -15,9 +16,10 @@ export default async function ResearchLayout({ children }: { children: React.Rea
   // proxy.ts に加えて、サーバー側の描画時にも認証を再確認する
   const auth = authenticateHeaders(await headers());
   if (!auth.ok) {
+    if (auth.reason !== 'misconfigured') redirect('/login');
     return (
       <div className="flex min-h-screen items-center justify-center research-root p-6 text-center text-sm text-ink-200">
-        {auth.reason === 'misconfigured' ? 'サーバーの認証設定が完了していません。管理者に連絡してください。' : '認証が必要です。ページを再読み込みしてください。'}
+        サーバーの認証設定が完了していません。管理者に連絡してください。
       </div>
     );
   }

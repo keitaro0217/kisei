@@ -46,6 +46,18 @@ export const settingsNav = [
   { href: '/research/settings/security', label: 'セキュリティ' },
 ];
 
+function LogoutButton({ className }: { className: string }) {
+  const logout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => undefined);
+    window.location.assign('/login');
+  };
+  return (
+    <button type="button" onClick={logout} className={className}>
+      ログアウト
+    </button>
+  );
+}
+
 function useActive() {
   const pathname = usePathname();
   return {
@@ -111,6 +123,7 @@ export default function ResearchShell({ basic, principal, children }: { basic: B
               <span className="h-2 w-2 rounded-full bg-emerald-400" aria-hidden />
               {principal}
             </p>
+            <LogoutButton className="mt-3 w-full rounded-md px-3 py-1.5 text-xs text-ink-200 ring-1 ring-inset ring-white/15 hover:bg-white/5 hover:text-white" />
           </div>
         </aside>
 
@@ -120,6 +133,7 @@ export default function ResearchShell({ basic, principal, children }: { basic: B
             <div className="flex h-14 items-center gap-2.5 px-4">
               <span className="flex h-8 w-8 items-center justify-center rc-primary rounded-lg text-sm font-bold">R</span>
               <span className="truncate text-sm font-semibold">{basic.appDisplayName}</span>
+              <LogoutButton className="ml-auto whitespace-nowrap rounded-md px-2.5 py-1 text-xs text-ink-200 ring-1 ring-inset ring-white/15" />
             </div>
             <nav className="flex gap-1 overflow-x-auto px-2">
               {nav.map((item) => (
