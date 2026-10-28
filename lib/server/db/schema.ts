@@ -42,4 +42,54 @@ export const SCHEMA_STATEMENTS: string[] = [
      data jsonb NOT NULL
    )`,
   `CREATE INDEX IF NOT EXISTS rc_audit_at_idx ON rc_audit (at DESC)`,
+  // ---- 実証研究機能（追加のみ。既存テーブルは変更しない） ----
+  `CREATE TABLE IF NOT EXISTS rc_rules (
+     id text PRIMARY KEY,
+     rule_key text NOT NULL,
+     version integer NOT NULL,
+     created_at timestamptz NOT NULL,
+     data jsonb NOT NULL,
+     UNIQUE (rule_key, version)
+   )`,
+  `CREATE TABLE IF NOT EXISTS rc_rule_pairs (
+     id text PRIMARY KEY,
+     created_at timestamptz NOT NULL,
+     data jsonb NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS rc_prompt_sets (
+     id text PRIMARY KEY,
+     name text NOT NULL,
+     version integer NOT NULL,
+     created_at timestamptz NOT NULL,
+     data jsonb NOT NULL,
+     UNIQUE (name, version)
+   )`,
+  `CREATE TABLE IF NOT EXISTS rc_studies (
+     id text PRIMARY KEY,
+     created_at timestamptz NOT NULL,
+     status text NOT NULL,
+     data jsonb NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS rc_study_sessions (
+     study_id text NOT NULL REFERENCES rc_studies(id) ON DELETE CASCADE,
+     condition_id text NOT NULL,
+     replicate integer NOT NULL,
+     seed bigint NOT NULL,
+     order_key bigint NOT NULL,
+     status text NOT NULL,
+     attempts integer NOT NULL DEFAULT 0,
+     lease_owner text,
+     lease_until timestamptz,
+     data jsonb NOT NULL DEFAULT '{}'::jsonb,
+     PRIMARY KEY (study_id, condition_id, replicate)
+   )`,
+  `CREATE INDEX IF NOT EXISTS rc_study_sessions_claim_idx ON rc_study_sessions (study_id, status, order_key)`,
+  `CREATE TABLE IF NOT EXISTS rc_decisions (
+     study_id text NOT NULL REFERENCES rc_studies(id) ON DELETE CASCADE,
+     condition_id text NOT NULL,
+     replicate integer NOT NULL,
+     step integer NOT NULL,
+     data jsonb NOT NULL,
+     PRIMARY KEY (study_id, condition_id, replicate, step)
+   )`,
 ];

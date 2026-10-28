@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { canonical } from '../util/canonical';
 import { apiKeyRequired, roleLabels } from '@/lib/research/labels';
 import type { ExperimentSnapshot, MarketConfig, ResearchRole, RoleSnapshot } from '@/lib/research/types';
 import { LlmError } from '../llm/errors';
@@ -6,7 +7,7 @@ import { getConfig, type Config } from '../storage/store';
 import { buildRuleDocument, RULE_DOCUMENT_VERSION } from './sim/market';
 import { DECISION_FORMAT, JUDGE_SYSTEM, PROMPT_VERSION, TOOL_VERSION, TRADING_AGENT_SYSTEM } from './sim/prompts';
 
-function roleSnapshot(state: Config, role: ResearchRole): RoleSnapshot {
+export function roleSnapshot(state: Config, role: ResearchRole): RoleSnapshot {
   const assignment = state.roles[role];
   const label = roleLabels[role].label;
   if (!assignment.providerId || !assignment.model) {
@@ -50,17 +51,6 @@ export async function buildSnapshot(market: MarketConfig, judgeEnabled: boolean)
   };
 }
 
-function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value)
-      .sort()
-      .filter((k) => (value as Record<string, unknown>)[k] !== undefined)
-      .map((k) => `${JSON.stringify(k)}:${canonical((value as Record<string, unknown>)[k])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value);
-}
 
 /**
  * 研究条件（モデル・推論設定・プロンプト・ツール構成・市場条件・規則文書）のハッシュ。

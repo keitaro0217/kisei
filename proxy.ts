@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateHeaders, unauthorizedResponse } from '@/lib/server/auth';
 import { isProduction, validateRequiredEnv } from '@/lib/server/env';
 import { configProblemsResponse } from '@/lib/server/configStatus';
+import { authFailureLimiter, clientKey, isCrossSiteWrite } from '@/lib/server/security/requestGuards';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
+function requestHost(request: NextRequest): string {
+  return (request.headers.get('x-forwarded-host')?.split(',')[0]?.trim() || request.headers.get('host') || request.nextUrl.host).toLowerCase();
+}
+
 function requestHostname(request: NextRequest): string {
-  const host = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim() || request.headers.get('host') || request.nextUrl.host;
-  return host.replace(/:\d+$/, '').toLowerCase();
+  return requestHost(request).replace(/:\d+$/, '');
 }
 
 function requestProtocol(request: NextRequest): string {
@@ -35,10 +39,28 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // 保存済みの認証情報を悪用した他サイトからの書き込み（CSRF）を拒否する
+  if (isCrossSiteWrite(request.method, request.headers, requestHost(request))) {
+    return NextResponse.json({ error: { code: 'cross_site_request', message: '他のサイトからの操作は受け付けません。' } }, { status: 403 });
+  }
+
+  // パスワードの誤りが続いた接続元は一定時間拒否する（パスワードの照合も行わない）
+  const client = clientKey(request.headers);
+  const locked = authFailureLimiter.lockedFor(client);
+  if (locked > 0) {
+    return NextResponse.json(
+      { error: { code: 'too_many_attempts', message: '認証の失敗が続いたため、しばらく時間をおいてから再度お試しください。' } },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil(locked / 1000)), 'Cache-Control': 'no-store' } },
+    );
+  }
+
   const result = authenticateHeaders(request.headers);
   if (!result.ok) {
+    // 認証情報なし（ブラウザの最初のリクエスト）は失敗として数えない
+    if (result.reason === 'invalid') authFailureLimiter.recordFailure(client);
     return unauthorizedResponse(result);
   }
+  authFailureLimiter.recordSuccess(client);
 
   // 本番で必須の環境変数に問題があれば、認証済みの利用者にだけ原因（変数名と理由）を表示して処理を止める
   if (production) {
