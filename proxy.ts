@@ -45,6 +45,11 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // 監視イベントの取り込み API は、接続元ごとのトークン（Bearer）で認証する。検証は Route Handler で行う
+  if (request.nextUrl.pathname === '/api/monitor/events' && request.headers.get('authorization')?.startsWith('Bearer ')) {
+    return withSecurityHeaders(NextResponse.next(), production);
+  }
+
   // 保存済みの認証情報を悪用した他サイトからの書き込み（CSRF）を拒否する
   if (isCrossSiteWrite(request.method, request.headers, requestHost(request))) {
     return NextResponse.json({ error: { code: 'cross_site_request', message: '他のサイトからの操作は受け付けません。' } }, { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
