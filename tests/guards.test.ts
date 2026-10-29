@@ -30,6 +30,39 @@ describe('CSRF 対策', () => {
   });
 });
 
+describe('ログイン画面のセッション', () => {
+  it('正しいパスワードでセッション Cookie を発行し、その Cookie で認証できる。誤りは 401 で、続くと 429', async () => {
+    const { POST } = await import('@/app/api/auth/login/route');
+    const { authenticateHeaders } = await import('@/lib/server/auth');
+    const login = (password: string, ip: string, next?: string) =>
+      POST(new Request('http://localhost/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': ip }, body: JSON.stringify({ password, next }) }));
+    const ok = await login('correct-horse-battery', '198.51.100.20', '//evil.example/');
+    expect(ok.status).toBe(200);
+    expect((await ok.json()).next).toBe('/research');
+    const cookie = ok.headers.get('set-cookie')!;
+    expect(cookie).toMatch(/^kisei_session=v1\.\d+\.[A-Za-z0-9_-]{43}; Path=\/; Max-Age=43200; HttpOnly; SameSite=Lax/);
+    expect(cookie).not.toContain('correct-horse-battery');
+    const token = cookie.split(';')[0];
+    expect(authenticateHeaders(new Headers({ cookie: `other=1; ${token}` })).ok).toBe(true);
+    // 改ざんした Cookie は拒否する
+    expect(authenticateHeaders(new Headers({ cookie: token.replace(/.$/, (c) => (c === 'A' ? 'B' : 'A')) })).ok).toBe(false);
+    for (let i = 0; i < 9; i++) expect((await login('wrong-password-123', '198.51.100.21')).status).toBe(401);
+    const tenth = await login('wrong-password-123', '198.51.100.21');
+    expect(tenth.status).toBe(401);
+    expect((await login('correct-horse-battery', '198.51.100.21')).status).toBe(429);
+  });
+
+  it('有効期限切れ・別のパスワードで署名したセッションは無効', async () => {
+    const { createSessionToken, verifySessionToken, safeNextPath } = await import('@/lib/server/auth/session');
+    const t = createSessionToken('pw-one-123456', 0);
+    expect(verifySessionToken(t, 'pw-one-123456', 1000)).toBe(true);
+    expect(verifySessionToken(t, 'pw-one-123456', 13 * 3600 * 1000)).toBe(false);
+    expect(verifySessionToken(t, 'pw-two-123456', 1000)).toBe(false);
+    expect(safeNextPath('/research/rules')).toBe('/research/rules');
+    for (const bad of ['https://evil.example', '//evil.example', '/\\evil.example', '/login', null]) expect(safeNextPath(bad)).toBe('/research');
+  });
+});
+
 describe('総当たり対策', () => {
   it('一定回数の失敗でロックし、時間経過で解除する', async () => {
     const { FailureLimiter } = await import('@/lib/server/security/requestGuards');
@@ -59,17 +92,19 @@ describe('総当たり対策', () => {
     expect(proxy(req('correct-horse-battery', '198.51.100.7')).status).toBe(200);
   });
 
-  it('未認証の画面表示には UTF-8 の HTML、API には UTF-8 の JSON を返す（文字化けしない）', async () => {
+  it('未認証の画面表示はログイン画面へ移動し、API には UTF-8 の JSON を返す（認証ダイアログは出さない）', async () => {
     const { proxy } = await import('@/proxy');
     const { NextRequest } = await import('next/server');
-    const page = proxy(new NextRequest('http://localhost/research', { headers: { 'x-forwarded-for': '192.0.2.50', accept: 'text/html,application/xhtml+xml' } }));
-    expect(page.status).toBe(401);
-    expect(page.headers.get('content-type')).toBe('text/html; charset=utf-8');
-    expect(page.headers.get('www-authenticate')).toMatch(/^Basic /);
-    expect(await page.text()).toContain('ログインが必要です');
+    const page = proxy(new NextRequest('http://localhost/research/studies?x=1', { headers: { 'x-forwarded-for': '192.0.2.50', accept: 'text/html,application/xhtml+xml' } }));
+    expect(page.status).toBe(303);
+    expect(page.headers.get('location')).toBe(`http://localhost/login?next=${encodeURIComponent('/research/studies?x=1')}`);
+    expect(page.headers.get('www-authenticate')).toBeNull();
     const apiRes = proxy(new NextRequest('http://localhost/api/research/studies', { headers: { 'x-forwarded-for': '192.0.2.51', accept: '*/*' } }));
     expect(apiRes.status).toBe(401);
     expect(apiRes.headers.get('content-type')).toBe('application/json; charset=utf-8');
+    expect(apiRes.headers.get('www-authenticate')).toBeNull();
+    // ログイン画面とログイン API は認証なしで通す
+    expect(proxy(new NextRequest('http://localhost/login', { headers: { 'x-forwarded-for': '192.0.2.52', accept: 'text/html' } })).status).toBe(200);
   });
 
   it('proxy は他サイトからの POST を 403 で拒否する', async () => {

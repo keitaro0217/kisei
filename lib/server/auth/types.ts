@@ -16,7 +16,7 @@ export type Principal = {
   /** 将来の金融機関（テナント）単位の分離用。Basic認証では単一テナント */
   tenantId: string;
   permissions: Permission[];
-  authMethod: 'basic' | 'development';
+  authMethod: 'basic' | 'session' | 'development';
 };
 
 export type AuthResult =
@@ -26,8 +26,6 @@ export type AuthResult =
 export interface AuthProvider {
   readonly name: string;
   authenticate(headers: Headers): AuthResult;
-  /** 401 応答に付与する WWW-Authenticate ヘッダー値 */
-  challenge(): string;
 }
 
 export const ALL_PERMISSIONS: Permission[] = [

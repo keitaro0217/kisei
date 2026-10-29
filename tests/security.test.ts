@@ -6,7 +6,7 @@ beforeAll(async () => {
 });
 
 describe('Basic認証', () => {
-  it('パスワードのみで認証し、ユーザー名は空欄でも任意でもよい。失敗時は401とWWW-Authenticateを返す', async () => {
+  it('パスワードのみで認証し、ユーザー名は空欄でも任意でもよい。失敗時は401を返し、ブラウザの認証ダイアログ（WWW-Authenticate）は出さない', async () => {
     const { requireAuth } = await import('@/lib/server/auth');
     const basic = (user: string, pass: string) => `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`;
     for (const user of ['', 'anyone', 'researcher']) {
@@ -18,7 +18,7 @@ describe('Basic認証', () => {
       const res = requireAuth(new Request('https://x/api', { headers: header ? { authorization: header } : {} }), 'settings:read');
       expect(res).toBeInstanceOf(Response);
       expect((res as Response).status).toBe(401);
-      expect((res as Response).headers.get('WWW-Authenticate')).toMatch(/^Basic realm=/);
+      expect((res as Response).headers.get('WWW-Authenticate')).toBeNull();
     }
   });
 

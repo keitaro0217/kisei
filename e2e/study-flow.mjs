@@ -19,14 +19,24 @@ mkdirSync(outDir, { recursive: true });
 
 const step = (msg) => console.log(`✓ ${msg}`);
 const browser = await chromium.launch();
-const context = await browser.newContext({ httpCredentials: { username: 'researcher', password }, acceptDownloads: true, viewport: { width: 1400, height: 1000 } });
+const context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1400, height: 1000 } });
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 
 try {
-  // 1. 雛形から条文A/B（見せ玉: かつ / 又は）を作成
+  // 0. ログイン画面（未ログインで開くとログイン画面へ移動し、ログイン後に元の画面へ戻る）
   await page.goto(`${base}/research/rules`);
+  await page.waitForURL(/\/login\?next=/);
+  await page.getByLabel('パスワード').fill('wrong-password');
+  await page.getByRole('button', { name: 'ログイン' }).click();
+  await page.getByText('パスワードが正しくありません。').waitFor();
+  await page.getByLabel('パスワード').fill(password);
+  await page.getByRole('button', { name: 'ログイン' }).click();
+  await page.waitForURL(/\/research\/rules$/);
+  step('ログイン画面でパスワードを入力し、元の画面に戻った');
+
+  // 1. 雛形から条文A/B（見せ玉: かつ / 又は）を作成
   await page.getByText('見せ玉: 「かつ」と「又は」').first().waitFor();
   await page.getByRole('button', { name: 'この雛形で条文A/Bを作成' }).first().click();
   await page.waitForURL(/\/research\/rules\/pairs\//);
@@ -86,6 +96,13 @@ try {
     if (!check(text)) throw new Error(`${name} の内容が想定と異なります`);
     step(`${name} をエクスポートした（${download.suggestedFilename()}）`);
   }
+
+  // 7. ログアウトするとログイン画面に戻り、研究画面は表示されない
+  await page.getByRole('button', { name: 'ログアウト' }).first().click();
+  await page.waitForURL(/\/login/);
+  await page.goto(`${base}/research`);
+  await page.waitForURL(/\/login/);
+  step('ログアウトした');
 
   if (errors.length) throw new Error(`ページでエラーが発生しました: ${errors.join(' / ')}`);
   console.log('すべての手順が完了しました');

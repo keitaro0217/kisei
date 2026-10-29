@@ -5,6 +5,12 @@ import { configProblemsResponse } from '@/lib/server/configStatus';
 import { authFailureLimiter, clientKey, isCrossSiteWrite } from '@/lib/server/security/requestGuards';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+const PUBLIC_PATHS = new Set(['/login', '/api/auth/login', '/api/auth/logout']);
+
+function withSecurityHeaders(response: NextResponse, production: boolean): NextResponse {
+  if (production) response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  return response;
+}
 
 function requestHost(request: NextRequest): string {
   return (request.headers.get('x-forwarded-host')?.split(',')[0]?.trim() || request.headers.get('host') || request.nextUrl.host).toLowerCase();
@@ -23,7 +29,7 @@ function requestProtocol(request: NextRequest): string {
 export function proxy(request: NextRequest) {
   const production = isProduction();
 
-  // Basic認証は平文で認証情報を送るため、本番ではHTTPS以外を受け付けない。
+  // パスワードやセッション Cookie を平文で送らないよう、本番ではHTTPS以外を受け付けない。
   // ローカルでの `next start` 動作確認のため、ループバックのみ例外とする。
   if (production && requestProtocol(request) !== 'https' && !LOOPBACK_HOSTS.has(requestHostname(request))) {
     if (request.method === 'GET' || request.method === 'HEAD') {
@@ -44,6 +50,11 @@ export function proxy(request: NextRequest) {
     return NextResponse.json({ error: { code: 'cross_site_request', message: '他のサイトからの操作は受け付けません。' } }, { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
   }
 
+  // ログイン画面とログイン・ログアウトの API は認証なしで表示する（照合と総当たり対策は API 側で行う）
+  if (PUBLIC_PATHS.has(request.nextUrl.pathname)) {
+    return withSecurityHeaders(NextResponse.next(), production);
+  }
+
   // パスワードの誤りが続いた接続元は一定時間拒否する（パスワードの照合も行わない）
   const client = clientKey(request.headers);
   const locked = authFailureLimiter.lockedFor(client);
@@ -58,7 +69,7 @@ export function proxy(request: NextRequest) {
   if (!result.ok) {
     // 認証情報なし（ブラウザの最初のリクエスト）は失敗として数えない
     if (result.reason === 'invalid') authFailureLimiter.recordFailure(client);
-    return unauthorizedResponse(result, request.headers);
+    return unauthorizedResponse(result, request);
   }
   authFailureLimiter.recordSuccess(client);
 
@@ -68,11 +79,7 @@ export function proxy(request: NextRequest) {
     if (problems.length > 0) return configProblemsResponse(request.nextUrl.pathname, problems);
   }
 
-  const response = NextResponse.next();
-  if (production) {
-    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-  }
-  return response;
+  return withSecurityHeaders(NextResponse.next(), production);
 }
 
 export const config = {
