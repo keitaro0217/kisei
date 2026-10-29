@@ -23,6 +23,8 @@ import {
 import { getProviderRecord, ValidationError } from './providers';
 import { runEpisode } from './sim/episode';
 import { runPendingStudyWork } from './study/studies';
+import { runPendingEvalWork } from './eval/evaluation';
+import { listRunningEvalRuns } from '../storage/evalStore';
 import { listStudiesNeedingWork } from '../storage/studyStore';
 import { buildSnapshot, versionHashOf } from './snapshot';
 import { assertPricedWhenBudgeted, assertWithinBudget } from './usage';
@@ -342,6 +344,12 @@ export async function runPendingWork(budgetMs: number): Promise<boolean> {
   if (Date.now() < deadline) {
     if (await runPendingStudyWork(deadline)) more = true;
   } else if ((await listStudiesNeedingWork(1)).length > 0) {
+    more = true;
+  }
+  // 評価（LLM Judge など）の実行
+  if (Date.now() < deadline) {
+    if (await runPendingEvalWork(deadline)) more = true;
+  } else if ((await listRunningEvalRuns(1)).length > 0) {
     more = true;
   }
   return more;

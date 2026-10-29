@@ -48,6 +48,8 @@ function Designer() {
   const [volatility, setVolatility] = useState('0.02');
   const [agent, setAgent] = useState<'mock' | 'model'>('mock');
   const [promptSetId, setPromptSetId] = useState('');
+  const [pair, setPair] = useState<RulePair | null>(null);
+  const [withControl, setWithControl] = useState(false);
 
   useEffect(() => {
     Promise.all([api<{ rules: RuleVersion[] }>('/rules'), api<{ pairs: RulePair[] }>('/rule-pairs'), api<{ prompts: PromptSet[] }>('/prompts')])
@@ -55,6 +57,7 @@ function Designer() {
         setRules(r.rules);
         setPrompts(ps.prompts);
         const pair = pairId ? p.pairs.find((x) => x.id === pairId) : null;
+        setPair(pair ?? null);
         if (pair) {
           setTitle(pair.name);
           setQuestion(`条文の${pair.changedTerms || '文言'}の違いで、エージェントの行動と規則違反率は変わるか。`);
@@ -70,6 +73,29 @@ function Designer() {
   }, [pairId]);
 
   if (!rules) return <Loading />;
+
+  /** 2×2 計画: 文言（A/B）× 規制趣旨の提示（なし/あり）。必要に応じて規則なしの統制群 C4 を加える */
+  const apply2x2 = () => {
+    if (!pair) return;
+    const cell = (id: string, label: string, ruleId: string | null, purpose: boolean): CondForm => ({
+      ...newCondition(0, ruleId ? [ruleId] : []),
+      id,
+      label,
+      includePurpose: purpose,
+      presentRules: ruleId !== null,
+    });
+    const next = [
+      cell('A-C1', `文言A（${pair.ruleA.ruleKey}）・趣旨なし`, pair.ruleA.id, false),
+      cell('A-C2', `文言A（${pair.ruleA.ruleKey}）・趣旨あり`, pair.ruleA.id, true),
+      cell('B-C1', `文言B（${pair.ruleB.ruleKey}）・趣旨なし`, pair.ruleB.id, false),
+      cell('B-C2', `文言B（${pair.ruleB.ruleKey}）・趣旨あり`, pair.ruleB.id, true),
+    ];
+    if (withControl) next.push(cell('C4', '規則なし（統制群）', null, false));
+    setConditions(next);
+    setPrimary({ treatment: 'B-C1', control: 'A-C1' });
+    setIv('条文の文言（A/B）、規制趣旨の提示（なし/あり）');
+    setPlan('主要比較（文言B − 文言A、趣旨なし）の規則違反率の差を、反復単位の対応のあるブートストラップと並べ替え検定で評価する。文言と趣旨の主効果・交互作用はロジスティック回帰（セッション単位のクラスター頑健標準誤差）で推定する。副次比較は Holm 法で補正する。');
+  };
 
   const updateCond = (i: number, patch: Partial<CondForm>) => setConditions(conditions.map((c, j) => (j === i ? { ...c, ...patch } : c)));
   const totalCalls = conditions.length * (Number(replicates) || 0) * (Number(steps) || 0);
@@ -155,6 +181,18 @@ function Designer() {
             </div>
           </div>
         </Card>
+
+        {pair && (
+          <Card title="実験計画の雛形" description={`ミニマルペア「${pair.name}」から条件を作成します。`}>
+            <div className="flex flex-wrap items-center gap-4">
+              <Button onClick={apply2x2}>2×2（文言A/B × 趣旨なし/あり）にする</Button>
+              <label className="flex items-center gap-2 text-sm text-ink-100">
+                <input type="checkbox" checked={withControl} onChange={(e) => setWithControl(e.target.checked)} />
+                規則なしの統制群（C4）を加える
+              </label>
+            </div>
+          </Card>
+        )}
 
         <Card
           title="条件"

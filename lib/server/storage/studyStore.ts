@@ -6,7 +6,9 @@ import type {
   Study,
   StudySession,
 } from '@/lib/research/study-types';
+import type { TraceRecord } from '@/lib/research/trace-types';
 import { getDb, type Queryable } from '../db';
+import { upsertTraceIn, type TraceFlags } from './traceStore';
 
 // 実証研究機能のデータ保存（PostgreSQL）。値は ::text::jsonb で渡す（ドライバーの二重エンコードを防ぐ）。
 
@@ -280,13 +282,17 @@ export async function insertDecisions(records: DecisionRecord[]): Promise<void> 
   });
 }
 
-export async function listDecisions(studyId: string, opts: { conditionId?: string; limit?: number; offset?: number } = {}): Promise<DecisionRecord[]> {
+export async function listDecisions(studyId: string, opts: { conditionId?: string; replicate?: number; limit?: number; offset?: number } = {}): Promise<DecisionRecord[]> {
   const db = await getDb();
   const params: unknown[] = [studyId];
   let where = 'study_id = $1';
   if (opts.conditionId) {
     params.push(opts.conditionId);
     where += ` AND condition_id = $${params.length}`;
+  }
+  if (opts.replicate !== undefined) {
+    params.push(opts.replicate);
+    where += ` AND replicate = $${params.length}`;
   }
   params.push(opts.limit ?? 100000, opts.offset ?? 0);
   const rows = await db.query<{ data: DecisionRecord }>(
@@ -305,6 +311,7 @@ export async function completeSession(
   owner: string,
   decisions: DecisionRecord[],
   data: Partial<StudySession>,
+  trace?: { record: TraceRecord; flags: TraceFlags },
 ): Promise<boolean> {
   const db = await getDb();
   return db.transaction(async (tx) => {
@@ -321,6 +328,21 @@ export async function completeSession(
         [d.studyId, d.conditionId, d.replicate, d.step, json(d)],
       );
     }
+    if (trace) await upsertTraceIn(tx, trace.record, trace.flags);
     return true;
   });
+}
+
+/** 指定した判断（条件・反復・ステップ）だけを取得する */
+export async function getDecisionsByKeys(studyId: string, keys: { conditionId: string; replicate: number; step: number }[]): Promise<DecisionRecord[]> {
+  if (keys.length === 0) return [];
+  const db = await getDb();
+  const rows = await db.query<{ data: DecisionRecord }>(
+    `SELECT d.data FROM rc_decisions d
+       JOIN unnest($2::text[], $3::int[], $4::int[]) AS k(condition_id, replicate, step)
+         ON d.condition_id = k.condition_id AND d.replicate = k.replicate AND d.step = k.step
+      WHERE d.study_id = $1`,
+    [studyId, keys.map((k) => k.conditionId), keys.map((k) => k.replicate), keys.map((k) => k.step)],
+  );
+  return rows.map((r) => r.data);
 }

@@ -31,6 +31,12 @@ export type ConditionStats = {
   /** セッション単位の規則違反率（試行がないセッションは除外） */
   sessionViolationRate: Summary;
   pnl: Summary;
+  /** モデル呼び出しの費用の合計（USD、単価未登録の呼び出しは含まない） */
+  costUsd: number;
+  /** セッションの実行時間（秒） */
+  sessionSeconds: Summary;
+  /** ステップごとの規則違反率（試行がないステップは null） */
+  stepViolationRate: (number | null)[];
 };
 
 export type Summary = { n: number; mean: number | null; median: number | null; sd: number | null; min: number | null; max: number | null };
@@ -253,6 +259,14 @@ export function computeStudyStats(study: Study, sessions: StudySession[], decisi
       violationCodes,
       sessionViolationRate: summarize([...perRep.values()].filter((x) => x.n > 0).map((x) => x.k / x.n)),
       pnl: summarize(ss.filter((s) => s.status === 'completed' && s.pnl !== null).map((s) => s.pnl as number)),
+      costUsd: ds.reduce((a, d) => a + (d.usage?.costUsd ?? 0), 0),
+      sessionSeconds: summarize(
+        ss.filter((s) => s.status === 'completed' && s.startedAt && s.finishedAt).map((s) => (Date.parse(s.finishedAt!) - Date.parse(s.startedAt!)) / 1000),
+      ),
+      stepViolationRate: Array.from({ length: (study.frozen?.design ?? study.design).market.steps }, (_, step) => {
+        const at = ds.filter((d) => d.step === step && isAttempt(d));
+        return at.length ? at.filter(hasRuleViolation).length / at.length : null;
+      }),
     };
   });
 
@@ -336,4 +350,41 @@ export function computeStudyStats(study: Study, sessions: StudySession[], decisi
     notes.unshift('【モックデータ】この研究は決定論的なモックエージェントで実行されました。行動は規則を読まずにシードから生成されるため、条件間の差は規則エンジンの判定の違いだけを反映しています。AIの行動に関する研究結果として解釈しないでください。');
   }
   return { conditions: stats, comparisons, isMock: study.isMock, notes };
+}
+
+// ---------- 評価器の一致 ----------
+
+/** Cohen の κ（名義尺度）。一致が偶然の期待値と同じなら 0、完全一致なら 1。分母が 0 の場合は null */
+export function cohensKappa<T extends string>(pairs: [T, T][], categories: readonly T[]): number | null {
+  const n = pairs.length;
+  if (n === 0) return null;
+  const po = pairs.filter(([a, b]) => a === b).length / n;
+  let pe = 0;
+  for (const c of categories) {
+    const pa = pairs.filter(([a]) => a === c).length / n;
+    const pb = pairs.filter(([, b]) => b === c).length / n;
+    pe += pa * pb;
+  }
+  if (pe >= 1) return po === 1 ? 1 : null;
+  return (po - pe) / (1 - pe);
+}
+
+/**
+ * 一致の統計。pairs は [評価対象の判定, 基準の判定]。positive を陽性として Precision / Recall / F1 を求める。
+ */
+export function agreementStats<T extends string>(pairs: [T, T][], categories: readonly T[], positive: T) {
+  const n = pairs.length;
+  const tp = pairs.filter(([p, g]) => p === positive && g === positive).length;
+  const fp = pairs.filter(([p, g]) => p === positive && g !== positive).length;
+  const fn = pairs.filter(([p, g]) => p !== positive && g === positive).length;
+  const precision = tp + fp ? tp / (tp + fp) : null;
+  const recall = tp + fn ? tp / (tp + fn) : null;
+  return {
+    n,
+    agreement: n ? pairs.filter(([a, b]) => a === b).length / n : null,
+    kappa: cohensKappa(pairs, categories),
+    precision,
+    recall,
+    f1: precision !== null && recall !== null && precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : null,
+  };
 }

@@ -1,5 +1,7 @@
 import { apiError, withAuth } from '@/lib/server/api';
-import { decisionsCsv, markdownReport, sessionsCsv, summaryJson } from '@/lib/server/research/study/exports';
+import { decisionsCsv, manifestJson, markdownReport, sessionsCsv, summaryJson } from '@/lib/server/research/study/exports';
+import { listEvalRuns } from '@/lib/server/storage/evalStore';
+import { conditionLogistic } from '@/lib/server/research/study/regression';
 import { computeStudyStats } from '@/lib/server/research/study/stats';
 import { getStudyDetail, listDecisions } from '@/lib/server/research/study/studies';
 import { canonical } from '@/lib/server/util/canonical';
@@ -12,6 +14,7 @@ const FORMATS = {
   'summary.json': 'application/json; charset=utf-8',
   'config.json': 'application/json; charset=utf-8',
   'report.md': 'text/markdown; charset=utf-8',
+  'manifest.json': 'application/json; charset=utf-8',
 } as const;
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -27,6 +30,13 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     if (format === 'config.json') {
       // 凍結設定（キー順を正規化した JSON）とハッシュ。frozenHash は凍結設定から運用設定・凍結時刻を除いた内容のハッシュ
       body = JSON.stringify({ frozenHash: study.frozenHash, isMock: study.isMock, frozenConfig: JSON.parse(canonical(study.frozen)) }, null, 2);
+    } else if (format === 'manifest.json') {
+      const runs = await listEvalRuns(id);
+      body = JSON.stringify(
+        manifestJson(study, sessions, runs.map((r) => ({ name: r.name, kind: r.kind, promptVersion: r.promptVersion, promptHash: r.promptHash, model: r.judgeRole?.model ?? null }))),
+        null,
+        2,
+      );
     } else if (format === 'sessions.csv') {
       body = sessionsCsv(sessions);
     } else {
@@ -35,7 +45,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         body = decisionsCsv(decisions);
       } else {
         const stats = computeStudyStats(study, sessions, decisions);
-        body = format === 'summary.json' ? JSON.stringify(summaryJson(study, sessions, stats), null, 2) : markdownReport(study, sessions, stats);
+        const completed = new Set(sessions.filter((s) => s.status === 'completed').map((s) => `${s.conditionId}/${s.replicate}`));
+        const regression = conditionLogistic(study, decisions, completed);
+        body = format === 'summary.json' ? JSON.stringify({ ...summaryJson(study, sessions, stats), regression }, null, 2) : markdownReport(study, sessions, stats, regression);
       }
     }
     const name = `study-${id.slice(0, 8)}${study.isMock ? '-MOCK' : ''}-${format}`;

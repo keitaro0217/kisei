@@ -102,10 +102,19 @@ export type CostSettings = {
   globalMonthlyBudgetUsd: number | null;
 };
 
+/** 実行トレースの記録設定 */
+export type ObservabilitySettings = {
+  /** metadata: 本文を保存しない / redacted: 秘密情報・個人情報を伏せて保存 / full: そのまま保存 */
+  tracePayloadMode: 'metadata' | 'redacted' | 'full';
+  /** トレースの保存期間（日）。経過したトレースはワーカーが削除する */
+  traceRetentionDays: number;
+};
+
 export type AppSettings = {
   basic: BasicSettings;
   execution: ExecutionSettings;
   cost: CostSettings;
+  observability: ObservabilitySettings;
 };
 
 /** 管理者が入力するモデル単価（USD / 100万トークン） */

@@ -1,4 +1,6 @@
 import type { DecisionRecord, Study, StudySession } from '@/lib/research/study-types';
+import { contentHash } from '../../util/canonical';
+import type { LogisticResult } from './regression';
 import { hasRuleViolation, type StudyStats } from './stats';
 
 // 研究結果のエクスポート（CSV / JSON / Markdown）。
@@ -68,7 +70,7 @@ const fmt = (x: number | null, d = 3) => (x === null || !Number.isFinite(x) ? '�
 const pval = (p: number | null) => (p === null ? '—' : p < 0.001 ? '< 0.001' : p.toFixed(3));
 const md = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ');
 
-export function markdownReport(study: Study, sessions: StudySession[], stats: StudyStats): string {
+export function markdownReport(study: Study, sessions: StudySession[], stats: StudyStats, regression?: LogisticResult | null): string {
   const d = study.frozen?.design ?? study.design;
   const rules = study.frozen?.rules ?? [];
   const label = (id: string) => d.conditions.find((c) => c.id === id)?.label ?? id;
@@ -145,12 +147,29 @@ export function markdownReport(study: Study, sessions: StudySession[], stats: St
     }
     lines.push('');
   }
+  if (regression) {
+    lines.push('## 要因の効果（ロジスティック回帰）');
+    lines.push('');
+    if (!regression.ok) {
+      lines.push(`推定できませんでした: ${regression.reason}`);
+    } else {
+      lines.push(`目的変数: 発注・取消の試行が規則違反を含むか。試行 ${regression.n} 件（違反 ${regression.events} 件）、セッション ${regression.clusters} 個。標準誤差はセッション単位のクラスター頑健推定。`);
+      lines.push('');
+      lines.push('| 項 | 係数 | SE | オッズ比 | 95% 区間 | p |');
+      lines.push('|---|---|---|---|---|---|');
+      for (const c of regression.coefficients) {
+        lines.push(`| ${md(c.label)} | ${c.estimate.toFixed(3)} | ${c.se.toFixed(3)} | ${c.oddsRatio.toFixed(3)} | [${c.ci[0].toFixed(3)}, ${c.ci[1].toFixed(3)}] | ${pval(c.p)} |`);
+      }
+      for (const n of regression.notes) lines.push(`- ${n}`);
+    }
+    lines.push('');
+  }
   lines.push('## 方法と注意事項');
   lines.push('');
   for (const n of stats.notes) lines.push(`- ${n}`);
   lines.push('- 意思決定ログは「表明された説明」「提案された行動」「規則エンジンの判定」「監視AIの評価」を分けて記録しています。規則エンジンはAIの適法性の主張を参照しません。');
-  lines.push('- 監視AIの評価（Monitor Evidence）は本バージョンでは未実装のため、記録されていません。');
-  lines.push('- ロジスティック回帰・クラスター頑健標準誤差・Cohen の κ は本バージョンでは未実装です。');
+  lines.push('- 監視AIの評価（Monitor Evidence）は本バージョンでは未実装のため、記録されていません。規制趣旨の評価（LLM Judge・人の評価）と評価器の一致率（κ など）は「多層評価」の画面・出力を参照してください。');
+  lines.push('- 因果的な解釈: 条件は研究者が割り当て、同じ反復では全条件で同じ外生価格系列を使っています。ただし LLM の応答は確率的で、同じシードでも行動は一致しません。');
   lines.push(`- 失敗したセッション: ${sessions.filter((s) => s.status === 'failed').length} 件 / 未実行: ${sessions.filter((s) => s.status === 'pending' || s.status === 'running').length} 件`);
   lines.push('');
   lines.push('## 免責');
@@ -158,4 +177,39 @@ export function markdownReport(study: Study, sessions: StudySession[], stats: St
   lines.push(LEGAL_DISCLAIMER);
   lines.push('');
   return lines.join('\n');
+}
+
+export const SIMULATOR_VERSION = 'exogenous_simple@1';
+export const ENGINE_VERSION = 'rule-dsl@1';
+
+/**
+ * 再現性のためのマニフェスト。研究条件を構成する要素のハッシュと、完全な再現を妨げる要因を明記する。
+ */
+export function manifestJson(study: Study, sessions: StudySession[], graders: { name: string; kind: string; promptVersion: string; promptHash: string; model: string | null }[]) {
+  const f = study.frozen;
+  const completed = sessions.filter((s) => s.status === 'completed').sort((a, b) => a.conditionId.localeCompare(b.conditionId) || a.replicate - b.replicate);
+  const limitations = [
+    'LLM の応答は確率的なため、同じ設定・同じシードでも行動が一致するとは限りません（モックエージェントは完全に再現されます）。',
+    'モデル提供者がモデルを更新した場合、同じモデル ID でも挙動が変わる可能性があります（提供者がバージョンを返さない場合は記録できません）。',
+    'コードのバージョンは Vercel のコミット SHA から取得します。ローカル実行では "local" と記録され、コードの版を特定できません。',
+  ];
+  return {
+    schema: 'kisei.experiment-manifest/v1',
+    studyId: study.id,
+    title: (f?.design ?? study.design).title,
+    isMock: study.isMock,
+    frozenHash: study.frozenHash,
+    frozenAt: f?.frozenAt ?? null,
+    gitCommitSha: f?.codeVersion ?? null,
+    simulatorVersion: SIMULATOR_VERSION,
+    engineVersion: ENGINE_VERSION,
+    agent: f?.agentRole ? { providerType: f.agentRole.providerType, baseUrl: f.agentRole.baseUrl, model: f.agentRole.model, reasoning: f.agentRole.reasoning, maxOutputTokens: f.agentRole.maxOutputTokens } : { kind: 'mock' },
+    prompt: f ? { name: f.promptSet.name, version: f.promptSet.version, hash: contentHash(f.promptSet).slice(0, 16) } : null,
+    rules: (f?.rules ?? []).map((r) => ({ id: r.id, ruleKey: r.ruleKey, version: r.version, logicHash: r.logicHash, textHash: contentHash(r.text).slice(0, 16) })),
+    seeds: { baseSeed: (f?.design ?? study.design).baseSeed, replicates: (f?.design ?? study.design).replicates, rule: 'seed(r) = baseSeed + r（全条件で共通）' },
+    graders,
+    dataset: { completedSessions: completed.length, fingerprint: contentHash(completed.map((s) => [s.conditionId, s.replicate, s.seed, s.finalValue])).slice(0, 16) },
+    reproducibility: study.isMock ? 'deterministic' : 'stochastic',
+    limitations,
+  };
 }

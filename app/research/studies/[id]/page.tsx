@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
-import DecisionLog from '@/components/research/DecisionLog';
+import { useParams, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import DecisionLog, { type DecisionFocus } from '@/components/research/DecisionLog';
 import StudyChart from '@/components/research/StudyChart';
 import { Alert, Badge, Button, Card, Loading, PageHeader, Stat, Table, td } from '@/components/research/ui';
 import { useBasicSettings } from '@/components/research/ResearchShell';
@@ -11,8 +11,10 @@ import { api, formatDate } from '@/lib/research/client';
 import { objectiveLabels, personaLabels, studyStatusLabels } from '@/lib/research/study-labels';
 import type { Study, StudySession } from '@/lib/research/study-types';
 import type { StudyStats } from '@/lib/server/research/study/stats';
+import type { LogisticResult } from '@/lib/server/research/study/regression';
+import { ForestPlot, StepSeries } from '@/components/research/ComparisonCharts';
 
-type Detail = { study: Study; sessions: StudySession[]; stats: StudyStats | null };
+type Detail = { study: Study; sessions: StudySession[]; stats: StudyStats | null; regression: LogisticResult | null };
 
 const pct = (p: number | null) => (p === null ? '—' : `${(p * 100).toFixed(1)}%`);
 const ci = (c: [number, number] | null) => (c ? `[${(c[0] * 100).toFixed(1)}, ${(c[1] * 100).toFixed(1)}]` : '');
@@ -25,10 +27,20 @@ const EXPORTS: [string, string][] = [
   ['sessions.csv', 'セッション（CSV）'],
   ['summary.json', '集計結果（JSON）'],
   ['config.json', '凍結設定（JSON）'],
+  ['manifest.json', '再現性マニフェスト（JSON）'],
 ];
 
 export default function StudyPage() {
   const { id } = useParams<{ id: string }>();
+  const search = useSearchParams();
+  // トレースから「?condition=&replicate=&step=」で開いた場合に表示する判断
+  const focus = useMemo<DecisionFocus | null>(() => {
+    const c = search.get('condition');
+    const r = search.get('replicate');
+    const st = search.get('step');
+    if (!c || !r || !/^\d+$/.test(r)) return null;
+    return { conditionId: c, replicate: Number(r), step: st && /^\d+$/.test(st) ? Number(st) : null };
+  }, [search]);
   const basic = useBasicSettings() ?? undefined;
   const [data, setData] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +60,7 @@ export default function StudyPage() {
   }, [load]);
 
   if (!data) return error ? <Alert kind="error" title="読み込みに失敗しました">{error}</Alert> : <Loading />;
-  const { study, sessions, stats } = data;
+  const { study, sessions, stats, regression } = data;
   const d = study.frozen?.design ?? study.design;
   const done = sessions.filter((s) => s.status === 'completed').length;
   const failed = sessions.filter((s) => s.status === 'failed').length;
@@ -81,6 +93,16 @@ export default function StudyPage() {
         description={d.question || undefined}
         actions={
           <>
+            {study.frozen && (
+              <>
+                <Link href={`/research/studies/${id}/evaluation`} className="rounded-md bg-white/5 px-3.5 py-1.5 text-sm text-ink-100 ring-1 ring-inset ring-white/15 hover:bg-white/10">
+                  多層評価
+                </Link>
+                <Link href={`/research/traces?study=${id}`} className="rounded-md bg-white/5 px-3.5 py-1.5 text-sm text-ink-100 ring-1 ring-inset ring-white/15 hover:bg-white/10">
+                  実行トレース
+                </Link>
+              </>
+            )}
             {study.status === 'draft' && (
               <Button variant="primary" busy={busy === 'start'} onClick={() => act('start')}>
                 設定を凍結して開始
@@ -193,7 +215,7 @@ export default function StudyPage() {
         {stats && (
           <>
             <Card title="結果" description="完了したセッションのみを集計しています。">
-              <Table head={['条件', '完了/失敗/未実行', '判断数', '試行数', '規則違反率 [95% CI]', '拒否率', '趣旨逸脱率（受理中）', '判定不能率', '説明と判定の不一致（拒否中）', '損益の平均（SD）']}>
+              <Table head={['条件', '完了/失敗/未実行', '判断数', '試行数', '規則違反率 [95% CI]', '拒否率', '趣旨逸脱率（受理中）', '判定不能率', '説明と判定の不一致（拒否中）', '損益の平均（SD）', '損益の中央値 [最小, 最大]', '費用 (USD)', 'セッション時間（平均）']}>
                 {stats.conditions.map((s) => (
                   <tr key={s.conditionId}>
                     <td className={td}>{s.label}</td>
@@ -212,6 +234,11 @@ export default function StudyPage() {
                     <td className={td}>
                       {num(s.pnl.mean, 0)} <span className="text-xs text-ink-300">({num(s.pnl.sd, 0)})</span>
                     </td>
+                    <td className={td}>
+                      {num(s.pnl.median, 0)} <span className="text-xs text-ink-300">[{num(s.pnl.min, 0)}, {num(s.pnl.max, 0)}]</span>
+                    </td>
+                    <td className={td}>{s.costUsd > 0 ? `$${s.costUsd.toFixed(4)}` : study.isMock ? '0（モック）' : '—'}</td>
+                    <td className={td}>{num(s.sessionSeconds.mean, 2)} 秒</td>
                   </tr>
                 ))}
               </Table>
@@ -250,6 +277,64 @@ export default function StudyPage() {
                     </tr>
                   ))}
                 </Table>
+                <div className="mt-5">
+                  <ForestPlot
+                    isMock={study.isMock}
+                    rows={stats.comparisons.map((c) => ({ label: `${label(c.treatment)} − ${label(c.control)}`, estimate: c.pooledDiff, ci: c.bootstrapCi, primary: c.primary, p: c.holmP }))}
+                  />
+                </div>
+              </Card>
+            )}
+
+            <Card title="ステップごとの規則違反率">
+              <StepSeries isMock={study.isMock} series={stats.conditions.map((c) => ({ label: c.label, values: c.stepViolationRate }))} />
+            </Card>
+
+            {regression && (
+              <Card
+                title="要因の効果（ロジスティック回帰）"
+                description="目的変数は発注・取消の試行が規則違反を含むかどうか。条件間で値が2通りに分かれる要因を説明変数とし、すべての組み合わせがある2要因には交互作用を加えます。"
+              >
+                {!regression.ok ? (
+                  <Alert kind="info" title="推定できません">
+                    {regression.reason}
+                  </Alert>
+                ) : (
+                  <>
+                    <p className="mb-3 text-xs text-ink-200">
+                      試行 {regression.n} 件（違反 {regression.events} 件）・セッション {regression.clusters} 個・基準: {regression.baseline}
+                    </p>
+                    <Table head={['項', '係数（対数オッズ）', 'クラスター頑健 SE', 'オッズ比', '95% 区間', 'p 値']}>
+                      {regression.coefficients.map((c) => (
+                        <tr key={c.term}>
+                          <td className={td}>{c.label}</td>
+                          <td className={td}>{c.estimate.toFixed(3)}</td>
+                          <td className={td}>{c.se.toFixed(3)}</td>
+                          <td className={td}>{c.oddsRatio.toFixed(3)}</td>
+                          <td className={td}>
+                            [{c.ci[0].toFixed(3)}, {c.ci[1].toFixed(3)}]
+                          </td>
+                          <td className={td}>{pval(c.p)}</td>
+                        </tr>
+                      ))}
+                    </Table>
+                    <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-ink-200">
+                      {regression.levels.map((l) => (
+                        <li key={l.factor}>
+                          {l.label}: 基準 = {l.baseline.length > 40 ? '対照群の値' : l.baseline}、処置 = {l.treatment.length > 40 ? '他方の値' : l.treatment}
+                        </li>
+                      ))}
+                      {regression.skippedFactors.map((f) => (
+                        <li key={f.factor}>
+                          {f.label}: {f.reason}
+                        </li>
+                      ))}
+                      {regression.notes.map((n) => (
+                        <li key={n}>{n}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
               </Card>
             )}
 
@@ -258,7 +343,7 @@ export default function StudyPage() {
                 {stats.notes.map((n) => (
                   <li key={n}>{n}</li>
                 ))}
-                <li>監視AIの評価・ロジスティック回帰・クラスター頑健標準誤差・Cohen の κ は、このバージョンでは未実装です。</li>
+                <li>監視AI（Monitor Evidence）の評価は、このバージョンでは未実装です。Judge と人による評価は「多層評価」の画面で行います。</li>
                 <li>本結果は閉じた合成市場における研究用の実験結果であり、法令の解釈・適法性の判断ではありません。</li>
               </ul>
             </Card>
@@ -273,7 +358,7 @@ export default function StudyPage() {
               </div>
             </Card>
 
-            <DecisionLog studyId={id} conditions={d.conditions.map((c) => ({ id: c.id, label: c.label }))} />
+            <DecisionLog studyId={id} conditions={d.conditions.map((c) => ({ id: c.id, label: c.label }))} focus={focus} />
           </>
         )}
         <p className="text-xs text-ink-300">

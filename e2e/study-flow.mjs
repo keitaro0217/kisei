@@ -71,7 +71,7 @@ try {
   // 4. 統計比較
   await page.getByText('条件間の比較（規則違反率）').waitFor();
   await page.getByText('主要', { exact: true }).waitFor();
-  await page.locator('svg[role="img"]').waitFor();
+  await page.locator('svg[aria-label^="条件別の"]').first().waitFor();
   step('統計比較の表とグラフが表示された');
 
   // 5. 行動ログ（4要素）の確認
