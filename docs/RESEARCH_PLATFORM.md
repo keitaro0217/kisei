@@ -33,16 +33,15 @@
 | ログイン | アプリのログイン画面（/login）でパスワードを入力。署名付きのセッション Cookie（HttpOnly・12時間）を発行し、ブラウザの認証ダイアログは使わない。パスワードは従来どおり環境変数 `BASIC_AUTH_PASSWORD`。スクリプトからは Authorization ヘッダーでも利用可 |
 | セキュリティ | CSRF 対策（Fetch Metadata / Origin、JSON の Content-Type 必須）、パスワード誤りの連続による接続元の一時拒否、監査ログ（規則・ペア・研究の操作） |
 
-### 未実装（今後の Phase）
+### その後の追加（kisei Risk Intelligence）
 
-以下は画面にも「未実装」と表示し、実装済みとして扱っていません。
+実行トレース・多層評価・人の評価・ロジスティック回帰・Cohen の κ・Failure Library・原因分析・Auto-Patch・回帰テスト・PoC 評価・監視（試験版）を追加しました。各機能の実装状況（COMPLETE / PARTIAL / NOT IMPLEMENTED）は `docs/test-report.md` と各設計書を参照してください。
 
-- Phase 3: 状態を持つ市場（価格インパクト）、板寄せ（LOB）モード、監視AI（Monitor Evidence）、ReguBench（不公正取引パターンの合成データと train/val/test 分割）、ルールベース・ロジスティック回帰のベースライン、Bridge Study（C1〜C4、FAR/FRR 等）
-- Phase 4 の一部: ロジスティック回帰、クラスター頑健標準誤差、Cohen の κ、HTML / PDF レポート
-- Phase 5: Auto-Patch（修正案の生成と研究者の承認）、文書ライブラリと RAG、英語表示
-- ワーカー: 全体の同時実行数の上限、予算の原子的な予約（現在はプロバイダー単位の予算確認のみ）
-- セキュリティ: 個別アカウント・ロール（admin / researcher / viewer）、セッション管理。総当たり対策はインスタンスのメモリ内のみ（サーバーレスの複数インスタンス間では共有されない）
-- CI（GitHub Actions）
+### 未実装
+
+- 状態を持つ市場（価格インパクト）、注文板（LOB）、複数エージェント、ReguBench、Bridge Study（C1〜C4）
+- 監視 AI（Monitor Evidence）の評価、文書ライブラリと RAG、LLM による修正案・原因の候補の生成
+- 個別アカウント・ロール（admin / researcher / viewer）・セッション管理、英語表示
 
 ## 研究者向けの使い方
 

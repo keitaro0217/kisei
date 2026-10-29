@@ -158,7 +158,7 @@ export default function TraceDetailPage() {
                       {open.has(s.spanId) ? '▾' : '▸'}
                     </button>
                     <div className="min-w-0 flex-1">{row(s, 0)}</div>
-                    <span className="flex shrink-0 gap-1 pr-1">
+                    <span className="flex w-44 shrink-0 justify-end gap-1 pr-1">
                       {f.error && <Badge className="bg-rose-500/10 text-rose-200 ring-rose-400/30">エラー</Badge>}
                       {f.violation && <Badge className="bg-rose-500/10 text-rose-200 ring-rose-400/30">違反</Badge>}
                       {f.deviation && <Badge className="bg-amber-500/10 text-amber-200 ring-amber-400/30">趣旨逸脱</Badge>}
