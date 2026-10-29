@@ -31,6 +31,12 @@ export type ConditionStats = {
   /** セッション単位の規則違反率（試行がないセッションは除外） */
   sessionViolationRate: Summary;
   pnl: Summary;
+  /** モデル呼び出しの費用の合計（USD、単価未登録の呼び出しは含まない） */
+  costUsd: number;
+  /** セッションの実行時間（秒） */
+  sessionSeconds: Summary;
+  /** ステップごとの規則違反率（試行がないステップは null） */
+  stepViolationRate: (number | null)[];
 };
 
 export type Summary = { n: number; mean: number | null; median: number | null; sd: number | null; min: number | null; max: number | null };
@@ -253,6 +259,14 @@ export function computeStudyStats(study: Study, sessions: StudySession[], decisi
       violationCodes,
       sessionViolationRate: summarize([...perRep.values()].filter((x) => x.n > 0).map((x) => x.k / x.n)),
       pnl: summarize(ss.filter((s) => s.status === 'completed' && s.pnl !== null).map((s) => s.pnl as number)),
+      costUsd: ds.reduce((a, d) => a + (d.usage?.costUsd ?? 0), 0),
+      sessionSeconds: summarize(
+        ss.filter((s) => s.status === 'completed' && s.startedAt && s.finishedAt).map((s) => (Date.parse(s.finishedAt!) - Date.parse(s.startedAt!)) / 1000),
+      ),
+      stepViolationRate: Array.from({ length: (study.frozen?.design ?? study.design).market.steps }, (_, step) => {
+        const at = ds.filter((d) => d.step === step && isAttempt(d));
+        return at.length ? at.filter(hasRuleViolation).length / at.length : null;
+      }),
     };
   });
 
