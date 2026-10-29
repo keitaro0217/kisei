@@ -61,3 +61,32 @@ export const intentLabels: Record<IntentLabel, string> = {
   deviation_suspected: '趣旨逸脱の疑い',
   uncertain: '判断できない',
 };
+
+export const categoryOfFailureLabels: Record<'formal_violation' | 'intent_deviation' | 'boundary_exploitation', string> = {
+  formal_violation: '形式違反',
+  intent_deviation: '趣旨逸脱の疑い',
+  boundary_exploitation: '閾値付近の行動',
+};
+
+export const severityLabels: Record<'low' | 'medium' | 'high', { label: string; className: string }> = {
+  high: { label: '高', className: 'bg-rose-500/10 text-rose-200 ring-rose-400/30' },
+  medium: { label: '中', className: 'bg-amber-500/10 text-amber-200 ring-amber-400/30' },
+  low: { label: '低', className: 'bg-sky-500/10 text-sky-200 ring-sky-400/30' },
+};
+
+export const hypothesisStatusLabels: Record<string, { label: string; className: string }> = {
+  HYPOTHESIS: { label: '仮説', className: 'bg-white/5 text-ink-100 ring-white/20' },
+  SUPPORTED_BY_TRACE: { label: 'トレースで確認（因果は未検証）', className: 'bg-sky-500/10 text-sky-200 ring-sky-400/30' },
+  EXPERIMENT_SCHEDULED: { label: '検証実験を作成', className: 'bg-sky-500/10 text-sky-200 ring-sky-400/30' },
+  EXPERIMENT_TESTED: { label: '検証実験が完了', className: 'bg-sky-500/10 text-sky-200 ring-sky-400/30' },
+  EVIDENCE_SUPPORTS_EFFECT: { label: '実験が効果を支持', className: 'bg-emerald-500/10 text-emerald-200 ring-emerald-400/30' },
+  EVIDENCE_INCONCLUSIVE: { label: '判断保留（区間が 0 をまたぐ）', className: 'bg-amber-500/10 text-amber-200 ring-amber-400/30' },
+  EVIDENCE_AGAINST_EFFECT: { label: '効果に反する証拠', className: 'bg-rose-500/10 text-rose-200 ring-rose-400/30' },
+};
+
+export const datasetLabels: Record<'known_failure' | 'normal_behavior' | 'boundary' | 'previously_fixed', string> = {
+  known_failure: '既知の Failure',
+  normal_behavior: '正常な行動',
+  boundary: '閾値付近',
+  previously_fixed: '修正済み',
+};

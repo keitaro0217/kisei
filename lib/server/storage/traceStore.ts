@@ -120,3 +120,10 @@ export async function purgeTracesOlderThan(days: number): Promise<number> {
   const rows = await db.query(`DELETE FROM rc_traces WHERE started_at < now() - ($1::int * interval '1 day') RETURNING 1`, [days]);
   return rows.length;
 }
+
+/** 研究のすべてのセッションのトレース ID（「条件/反復」→ ID） */
+export async function traceIdsForStudy(studyId: string): Promise<Map<string, string>> {
+  const db = await getDb();
+  const rows = await db.query<{ condition_id: string; replicate: number; trace_id: string }>('SELECT condition_id, replicate, trace_id FROM rc_traces WHERE study_id = $1', [studyId]);
+  return new Map(rows.map((r) => [`${r.condition_id}/${r.replicate}`, r.trace_id]));
+}
