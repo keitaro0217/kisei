@@ -94,30 +94,20 @@ function Detail({ d }: { d: DecisionRecord }) {
   );
 }
 
-export default function DecisionLog({ studyId, conditions }: { studyId: string; conditions: { id: string; label: string }[] }) {
-  const [condition, setCondition] = useState('');
-  const [replicate, setReplicate] = useState('');
-  const [offset, setOffset] = useState(0);
+export type DecisionFocus = { conditionId: string; replicate: number; step: number | null };
+
+export default function DecisionLog({ studyId, conditions, focus }: { studyId: string; conditions: { id: string; label: string }[]; focus?: DecisionFocus | null }) {
+  const [condition, setCondition] = useState(focus?.conditionId ?? '');
+  const [replicate, setReplicate] = useState(focus ? String(focus.replicate) : '');
+  const [offset, setOffset] = useState(focus?.step != null ? Math.floor(focus.step / PAGE) * PAGE : 0);
   const [rows, setRows] = useState<DecisionRecord[]>([]);
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(focus?.step != null ? `${focus.conditionId}/${focus.replicate}/${focus.step}` : null);
   const [error, setError] = useState<string | null>(null);
 
-  // トレースなどから「?condition=&replicate=&step=」で開いた場合は、その判断を表示する
+  // トレースなどから特定の判断を指定して開いた場合は、意思決定ログまでスクロールする
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search);
-    const c = q.get('condition');
-    const r = q.get('replicate');
-    const st = q.get('step');
-    if (c && r && /^\d+$/.test(r)) {
-      setCondition(c);
-      setReplicate(r);
-      if (st && /^\d+$/.test(st)) {
-        setOffset(Math.floor(Number(st) / PAGE) * PAGE);
-        setOpen(`${c}/${r}/${st}`);
-      }
-      document.getElementById('decision-log')?.scrollIntoView();
-    }
-  }, []);
+    if (focus) document.getElementById('decision-log')?.scrollIntoView();
+  }, [focus]);
 
   useEffect(() => {
     const q = new URLSearchParams({ limit: String(PAGE), offset: String(offset) });

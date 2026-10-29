@@ -47,7 +47,6 @@ function TraceSearch() {
   useEffect(() => {
     const q = new URLSearchParams(params.toString());
     q.set('limit', '50');
-    setTraces(null);
     api<{ traces: TraceSummary[] }>(`/traces?${q}`)
       .then((r) => setTraces(r.traces))
       .catch((e) => setError(e.message));

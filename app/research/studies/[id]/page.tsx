@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
-import DecisionLog from '@/components/research/DecisionLog';
+import { useParams, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import DecisionLog, { type DecisionFocus } from '@/components/research/DecisionLog';
 import StudyChart from '@/components/research/StudyChart';
 import { Alert, Badge, Button, Card, Loading, PageHeader, Stat, Table, td } from '@/components/research/ui';
 import { useBasicSettings } from '@/components/research/ResearchShell';
@@ -29,6 +29,15 @@ const EXPORTS: [string, string][] = [
 
 export default function StudyPage() {
   const { id } = useParams<{ id: string }>();
+  const search = useSearchParams();
+  // トレースから「?condition=&replicate=&step=」で開いた場合に表示する判断
+  const focus = useMemo<DecisionFocus | null>(() => {
+    const c = search.get('condition');
+    const r = search.get('replicate');
+    const st = search.get('step');
+    if (!c || !r || !/^\d+$/.test(r)) return null;
+    return { conditionId: c, replicate: Number(r), step: st && /^\d+$/.test(st) ? Number(st) : null };
+  }, [search]);
   const basic = useBasicSettings() ?? undefined;
   const [data, setData] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -273,7 +282,7 @@ export default function StudyPage() {
               </div>
             </Card>
 
-            <DecisionLog studyId={id} conditions={d.conditions.map((c) => ({ id: c.id, label: c.label }))} />
+            <DecisionLog studyId={id} conditions={d.conditions.map((c) => ({ id: c.id, label: c.label }))} focus={focus} />
           </>
         )}
         <p className="text-xs text-ink-300">
