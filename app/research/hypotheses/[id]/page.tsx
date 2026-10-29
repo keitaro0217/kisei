@@ -166,6 +166,27 @@ export default function HypothesisPage() {
           )}
         </Card>
 
+        <Card title="修正案" description="この原因の候補をもとに修正案を作成します（研究者の承認を経て、仮想環境でだけ検証します）。">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              busy={busy === 'patch'}
+              onClick={async () => {
+                setBusy('patch');
+                setError(null);
+                try {
+                  await api('/patches', { method: 'POST', body: { hypothesisId: id } });
+                  window.location.assign('/research/patches');
+                } catch (e) {
+                  setError((e as Error).message);
+                  setBusy(null);
+                }
+              }}
+            >
+              この候補から修正案を作成
+            </Button>
+          </div>
+        </Card>
+
         <Card title="証拠グラフ">
           <EvidenceGraph nodes={data.graph.nodes} edges={data.graph.edges} />
         </Card>

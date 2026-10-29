@@ -118,6 +118,23 @@ export default function ClusterPage() {
         </Card>
 
         <Card
+          title="修正案（Auto-Patch）"
+          description="このクラスターの Failure をもとに、規則文言・定義・判定ロジック・プロンプト・参照文書の修正案をテンプレートから作成します。作成した修正案は研究者の承認を経て、仮想環境でだけ検証されます。"
+          actions={
+            <Button
+              busy={busy === 'patch'}
+              onClick={() => run('patch', async () => `${(await api<{ patches: unknown[] }>('/patches', { method: 'POST', body: { fingerprint } })).patches.length} 件の修正案を作成しました（Auto-Patch の画面で確認できます）。`)}
+            >
+              修正案を作成
+            </Button>
+          }
+        >
+          <Link href="/research/patches" className="text-sm underline underline-offset-2">
+            Auto-Patch の画面を開く
+          </Link>
+        </Card>
+
+        <Card
           title="テストケース"
           description="代表的な Failure から、再現条件（判断の時点の状態・規則の版・行動）を抽出します。期待する趣旨の判定は人が確認して確定します。"
           actions={

@@ -90,3 +90,28 @@ export const datasetLabels: Record<'known_failure' | 'normal_behavior' | 'bounda
   boundary: '閾値付近',
   previously_fixed: '修正済み',
 };
+
+export const patchCategoryLabels: Record<'regulatory_text' | 'definition' | 'retrieval' | 'prompt' | 'system_rule', string> = {
+  regulatory_text: '規則文言',
+  definition: '定義・関連規程',
+  retrieval: '参照文書',
+  prompt: 'プロンプト',
+  system_rule: '判定ロジック・閾値',
+};
+
+export const patchStatusLabels: Record<string, { label: string; className: string }> = {
+  draft: { label: '下書き', className: 'bg-white/5 text-ink-100 ring-white/20' },
+  under_review: { label: 'レビュー中', className: 'bg-sky-500/10 text-sky-200 ring-sky-400/30' },
+  approved_for_simulation: { label: '実験への使用を承認', className: 'bg-sky-500/10 text-sky-200 ring-sky-400/30' },
+  simulation_completed: { label: '検証完了', className: 'bg-amber-500/10 text-amber-200 ring-amber-400/30' },
+  approved_for_recommendation: { label: '提案として承認', className: 'bg-emerald-500/10 text-emerald-200 ring-emerald-400/30' },
+  rejected: { label: '却下', className: 'bg-rose-500/10 text-rose-200 ring-rose-400/30' },
+  archived: { label: 'アーカイブ', className: 'bg-white/5 text-ink-300 ring-white/10' },
+};
+
+export const gateLabels: Record<'PASS' | 'FAIL' | 'INCONCLUSIVE' | 'REVIEW_REQUIRED', { label: string; className: string }> = {
+  PASS: { label: 'PASS', className: 'bg-emerald-500/10 text-emerald-200 ring-emerald-400/30' },
+  FAIL: { label: 'FAIL', className: 'bg-rose-500/10 text-rose-200 ring-rose-400/30' },
+  INCONCLUSIVE: { label: '判断保留', className: 'bg-amber-500/10 text-amber-200 ring-amber-400/30' },
+  REVIEW_REQUIRED: { label: '要確認', className: 'bg-sky-500/10 text-sky-200 ring-sky-400/30' },
+};
