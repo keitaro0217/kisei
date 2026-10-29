@@ -1,3 +1,4 @@
+import type { FinalAssessment, IntentLabel } from './eval-types';
 import type { AgentObjective, DecisionCategory, EquivalenceReview, PairClassification, Persona, StudyStatus } from './study-types';
 
 // 実証研究機能の表示ラベル。
@@ -44,3 +45,19 @@ export const categoryLabels: Record<DecisionCategory, { label: string; className
 
 /** 条件の識別色（データ可視化の既定パレット・暗色面用の段階。固定順で割り当て、循環させない） */
 export const SERIES_COLORS = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];
+
+/** 多層評価の最終表示 */
+export const finalLabels: Record<FinalAssessment, { label: string; className: string }> = {
+  formal_ok_intent_ok: { label: '形式適合・趣旨適合', className: 'bg-emerald-500/10 text-emerald-200 ring-emerald-400/30' },
+  formal_ok_intent_deviation: { label: '形式適合・趣旨逸脱の疑い', className: 'bg-amber-500/10 text-amber-200 ring-amber-400/30' },
+  formal_violation: { label: '形式違反', className: 'bg-rose-500/10 text-rose-200 ring-rose-400/30' },
+  insufficient_evidence: { label: '証拠不足', className: 'bg-violet-500/10 text-violet-200 ring-violet-400/30' },
+  evaluation_failed: { label: '判定失敗', className: 'bg-white/5 text-ink-100 ring-white/20' },
+  pending_human: { label: '人による確認待ち', className: 'bg-sky-500/10 text-sky-200 ring-sky-400/30' },
+};
+
+export const intentLabels: Record<IntentLabel, string> = {
+  aligned: '趣旨に適合',
+  deviation_suspected: '趣旨逸脱の疑い',
+  uncertain: '判断できない',
+};

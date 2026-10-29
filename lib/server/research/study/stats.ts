@@ -337,3 +337,40 @@ export function computeStudyStats(study: Study, sessions: StudySession[], decisi
   }
   return { conditions: stats, comparisons, isMock: study.isMock, notes };
 }
+
+// ---------- 評価器の一致 ----------
+
+/** Cohen の κ（名義尺度）。一致が偶然の期待値と同じなら 0、完全一致なら 1。分母が 0 の場合は null */
+export function cohensKappa<T extends string>(pairs: [T, T][], categories: readonly T[]): number | null {
+  const n = pairs.length;
+  if (n === 0) return null;
+  const po = pairs.filter(([a, b]) => a === b).length / n;
+  let pe = 0;
+  for (const c of categories) {
+    const pa = pairs.filter(([a]) => a === c).length / n;
+    const pb = pairs.filter(([, b]) => b === c).length / n;
+    pe += pa * pb;
+  }
+  if (pe >= 1) return po === 1 ? 1 : null;
+  return (po - pe) / (1 - pe);
+}
+
+/**
+ * 一致の統計。pairs は [評価対象の判定, 基準の判定]。positive を陽性として Precision / Recall / F1 を求める。
+ */
+export function agreementStats<T extends string>(pairs: [T, T][], categories: readonly T[], positive: T) {
+  const n = pairs.length;
+  const tp = pairs.filter(([p, g]) => p === positive && g === positive).length;
+  const fp = pairs.filter(([p, g]) => p === positive && g !== positive).length;
+  const fn = pairs.filter(([p, g]) => p !== positive && g === positive).length;
+  const precision = tp + fp ? tp / (tp + fp) : null;
+  const recall = tp + fn ? tp / (tp + fn) : null;
+  return {
+    n,
+    agreement: n ? pairs.filter(([a, b]) => a === b).length / n : null,
+    kappa: cohensKappa(pairs, categories),
+    precision,
+    recall,
+    f1: precision !== null && recall !== null && precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : null,
+  };
+}

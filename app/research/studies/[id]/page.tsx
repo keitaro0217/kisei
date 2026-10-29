@@ -90,6 +90,16 @@ export default function StudyPage() {
         description={d.question || undefined}
         actions={
           <>
+            {study.frozen && (
+              <>
+                <Link href={`/research/studies/${id}/evaluation`} className="rounded-md bg-white/5 px-3.5 py-1.5 text-sm text-ink-100 ring-1 ring-inset ring-white/15 hover:bg-white/10">
+                  多層評価
+                </Link>
+                <Link href={`/research/traces?study=${id}`} className="rounded-md bg-white/5 px-3.5 py-1.5 text-sm text-ink-100 ring-1 ring-inset ring-white/15 hover:bg-white/10">
+                  実行トレース
+                </Link>
+              </>
+            )}
             {study.status === 'draft' && (
               <Button variant="primary" busy={busy === 'start'} onClick={() => act('start')}>
                 設定を凍結して開始

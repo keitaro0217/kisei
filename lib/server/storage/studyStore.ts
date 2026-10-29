@@ -332,3 +332,17 @@ export async function completeSession(
     return true;
   });
 }
+
+/** 指定した判断（条件・反復・ステップ）だけを取得する */
+export async function getDecisionsByKeys(studyId: string, keys: { conditionId: string; replicate: number; step: number }[]): Promise<DecisionRecord[]> {
+  if (keys.length === 0) return [];
+  const db = await getDb();
+  const rows = await db.query<{ data: DecisionRecord }>(
+    `SELECT d.data FROM rc_decisions d
+       JOIN unnest($2::text[], $3::int[], $4::int[]) AS k(condition_id, replicate, step)
+         ON d.condition_id = k.condition_id AND d.replicate = k.replicate AND d.step = k.step
+      WHERE d.study_id = $1`,
+    [studyId, keys.map((k) => k.conditionId), keys.map((k) => k.replicate), keys.map((k) => k.step)],
+  );
+  return rows.map((r) => r.data);
+}
