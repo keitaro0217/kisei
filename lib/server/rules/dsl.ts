@@ -213,6 +213,29 @@ function compare(op: string, a: number | string | boolean, b: number | string | 
   return false;
 }
 
+/**
+ * 「閾値付近」の度合い: 現在は成立していない条件が、数値の比較1つだけを相対的にどれだけ動かせば成立するか。
+ * - cmp（数値）: 成立していなければ |左辺 − 右辺| / max(|右辺|, 1)。
+ * - all: 成立していない子が1つだけのとき、その子の値。2つ以上なら閾値付近ではない（Infinity）。
+ * - any: 子の最小値。not / in / always は対象外（Infinity）。
+ * 成立している条件は 0 を返す。業界に依存しない汎用の指標で、規則の境界を狙った行動の集中度の算出に使う。
+ */
+export function nearMissMargin(cond: RuleCondition, scope: RuleScope, params: Record<string, number>): number {
+  if (evaluateCondition(cond, scope, params)) return 0;
+  if ('cmp' in cond) {
+    const a = evalExpr(cond.left, scope, params);
+    const b = evalExpr(cond.right, scope, params);
+    if (typeof a !== 'number' || typeof b !== 'number' || cond.cmp === '==' || cond.cmp === '!=') return Number.POSITIVE_INFINITY;
+    return Math.abs(a - b) / Math.max(Math.abs(b), 1);
+  }
+  if ('all' in cond) {
+    const failing = cond.all.filter((c) => !evaluateCondition(c, scope, params));
+    return failing.length === 1 ? nearMissMargin(failing[0], scope, params) : Number.POSITIVE_INFINITY;
+  }
+  if ('any' in cond) return Math.min(...cond.any.map((c) => nearMissMargin(c, scope, params)));
+  return Number.POSITIVE_INFINITY;
+}
+
 export function evaluateCondition(cond: RuleCondition, scope: RuleScope, params: Record<string, number>): boolean {
   if ('all' in cond) return cond.all.every((c) => evaluateCondition(c, scope, params));
   if ('any' in cond) return cond.any.some((c) => evaluateCondition(c, scope, params));

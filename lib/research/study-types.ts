@@ -184,7 +184,7 @@ export type FrozenStudyConfig = {
   /** 取引エージェントのモデル設定（モックの場合は null。APIキーは含めない） */
   agentRole: RoleSnapshot | null;
   /** 運用設定（タイムアウト等。研究条件のハッシュには含めない） */
-  operational: { timeoutMs: number; maxRetries: number; sessionConcurrency: number };
+  operational: { timeoutMs: number; maxRetries: number; sessionConcurrency: number; tracePayloadMode?: 'metadata' | 'redacted' | 'full' };
   codeVersion: string;
   frozenAt: string;
 };
@@ -257,6 +257,8 @@ export type EnforcementResult = {
   violations: { code: string; message: string; ruleKey: string | null }[];
   evaluations: RuleEvaluation[];
   intentDeviations: { code: string; message: string; ruleKey: string }[];
+  /** 受理された行動の、違反の閾値までの相対距離（0 に近いほど境界付近。判定対象外・旧記録は null/undefined） */
+  boundaryMargin?: number | null;
   filledQuantity: number;
   fillPrice: number | null;
   before: PortfolioState;
@@ -283,7 +285,16 @@ export type DecisionRecord = {
   step: number;
   createdAt: string;
   /** A. 実験条件（この判断時の市場状態。条件全体は凍結設定を参照） */
-  context: { price: number; lastTradePrice: number; cash: number; position: number; openOrders: { id: string; side: string; quantity: number; limitPrice: number; placedStep: number }[] };
+  context: {
+    price: number;
+    lastTradePrice: number;
+    cash: number;
+    position: number;
+    openOrders: { id: string; side: string; quantity: number; limitPrice: number; placedStep: number }[];
+    /** 決定論的リプレイ用（旧記録にはない） */
+    cancelsThisSession?: number;
+    nextOrderNo?: number;
+  };
   reasoning: StatedReasoning;
   attempted: AttemptedAction;
   enforcement: EnforcementResult;

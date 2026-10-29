@@ -8,6 +8,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     const limit = Math.min(Math.max(Number(q.get('limit') ?? 50) || 50, 1), 500);
     const offset = Math.max(Number(q.get('offset') ?? 0) || 0, 0);
     const conditionId = q.get('condition') || undefined;
-    return json({ decisions: await listDecisions(id, { conditionId, limit, offset }) });
+    const rep = q.get('replicate');
+    const replicate = rep !== null && /^\d+$/.test(rep) ? Number(rep) : undefined;
+    return json({ decisions: await listDecisions(id, { conditionId, replicate, limit, offset }) });
   });
 }

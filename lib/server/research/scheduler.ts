@@ -2,6 +2,8 @@ import { after } from 'next/server';
 import { getCronSecret, isVercel } from '../env';
 import { safeMessage } from '../security/redact';
 import { runPendingWork } from './experiments';
+import { getSettings } from './settings';
+import { purgeTracesOlderThan } from '../storage/traceStore';
 
 // 実験ジョブの起動。
 // - リクエストへの応答後に after() で1スライス分処理する（Vercel では関数の最大実行時間内）。
@@ -35,8 +37,24 @@ async function continueOn(origin: string) {
   }
 }
 
+const g = globalThis as typeof globalThis & { __tracePurgedAt?: number };
+
+/** 保存期間を過ぎたトレースを削除する（インスタンスごとに1時間に1回まで） */
+async function purgeExpiredTraces() {
+  if (Date.now() - (g.__tracePurgedAt ?? 0) < 60 * 60_000) return;
+  g.__tracePurgedAt = Date.now();
+  try {
+    const { traceRetentionDays } = (await getSettings()).observability;
+    const removed = await purgeTracesOlderThan(traceRetentionDays);
+    if (removed > 0) console.log(`[worker] 保存期間（${traceRetentionDays}日）を過ぎたトレースを ${removed} 件削除しました。`);
+  } catch (e) {
+    console.error(`[worker] トレースの削除に失敗しました: ${safeMessage(e)}`);
+  }
+}
+
 /** 処理待ちの実験を1スライス分処理し、残りがあれば次のスライスを予約する */
 export async function drainWork(origin: string | null): Promise<void> {
+  await purgeExpiredTraces();
   let more: boolean;
   try {
     more = await runPendingWork(SLICE_BUDGET_MS);

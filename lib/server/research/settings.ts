@@ -36,6 +36,7 @@ type SettingsPatch = {
   basic?: Partial<Record<keyof AppSettings['basic'], unknown>>;
   execution?: Partial<Record<keyof AppSettings['execution'], unknown>>;
   cost?: Partial<Record<keyof AppSettings['cost'], unknown>>;
+  observability?: Partial<Record<keyof AppSettings['observability'], unknown>>;
 };
 
 export async function updateSettings(patch: SettingsPatch): Promise<AppSettings> {
@@ -74,6 +75,14 @@ export async function updateSettings(patch: SettingsPatch): Promise<AppSettings>
     if (patch.cost.globalMonthlyBudgetUsd !== undefined) {
       next.cost.globalMonthlyBudgetUsd = money(patch.cost.globalMonthlyBudgetUsd, '全体の月間予算', 'globalMonthlyBudgetUsd');
     }
+  }
+  if (patch.observability) {
+    const o = patch.observability;
+    if (o.tracePayloadMode !== undefined) {
+      if (!['metadata', 'redacted', 'full'].includes(o.tracePayloadMode as string)) throw new ValidationError('トレースの記録モードが正しくありません。', 'tracePayloadMode');
+      next.observability.tracePayloadMode = o.tracePayloadMode as AppSettings['observability']['tracePayloadMode'];
+    }
+    if (o.traceRetentionDays !== undefined) next.observability.traceRetentionDays = int(o.traceRetentionDays, 'トレースの保存期間', 1, 3650, 'traceRetentionDays');
   }
   return updateConfig((s) => {
     s.settings = next;

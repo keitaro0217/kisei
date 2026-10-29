@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Fragment, useEffect, useState } from 'react';
 import { api } from '@/lib/research/client';
 import { categoryLabels } from '@/lib/research/study-labels';
@@ -74,6 +75,11 @@ function Detail({ d }: { d: DecisionRecord }) {
       <Section label="E. 監視AIの評価">
         <p>{d.monitor ? `${d.monitor.judgement}: ${d.monitor.rationale}` : '未実施（このバージョンでは監視AIは未実装です）'}</p>
       </Section>
+      <Section label="関連">
+        <Link href={`/research/traces?study=${d.studyId}&condition=${encodeURIComponent(d.conditionId)}&replicate=${d.replicate}`} className="underline underline-offset-2">
+          このセッションの実行トレース
+        </Link>
+      </Section>
       <Section label="研究上の分類">
         <Badge className={categoryLabels[d.category].className}>{categoryLabels[d.category].label}</Badge>
         {d.reasoningActionDiscrepancy && <p className="text-amber-200">説明では「適法」としたが、規則エンジンに拒否されました。</p>}
@@ -90,42 +96,75 @@ function Detail({ d }: { d: DecisionRecord }) {
 
 export default function DecisionLog({ studyId, conditions }: { studyId: string; conditions: { id: string; label: string }[] }) {
   const [condition, setCondition] = useState('');
+  const [replicate, setReplicate] = useState('');
   const [offset, setOffset] = useState(0);
   const [rows, setRows] = useState<DecisionRecord[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // トレースなどから「?condition=&replicate=&step=」で開いた場合は、その判断を表示する
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const c = q.get('condition');
+    const r = q.get('replicate');
+    const st = q.get('step');
+    if (c && r && /^\d+$/.test(r)) {
+      setCondition(c);
+      setReplicate(r);
+      if (st && /^\d+$/.test(st)) {
+        setOffset(Math.floor(Number(st) / PAGE) * PAGE);
+        setOpen(`${c}/${r}/${st}`);
+      }
+      document.getElementById('decision-log')?.scrollIntoView();
+    }
+  }, []);
+
   useEffect(() => {
     const q = new URLSearchParams({ limit: String(PAGE), offset: String(offset) });
     if (condition) q.set('condition', condition);
+    if (replicate) q.set('replicate', replicate);
     api<{ decisions: DecisionRecord[] }>(`/studies/${studyId}/decisions?${q}`)
       .then((r) => setRows(r.decisions))
       .catch((e) => setError(e.message));
-  }, [studyId, condition, offset]);
+  }, [studyId, condition, replicate, offset]);
 
   const key = (d: DecisionRecord) => `${d.conditionId}/${d.replicate}/${d.step}`;
 
   return (
     <Card
+      id="decision-log"
       title="意思決定ログ"
       description="行をクリックすると、説明・行動・判定・監視を分けて表示します。"
       actions={
-        <select
-          className={`${inputClass} w-56`}
-          value={condition}
-          onChange={(e) => {
-            setCondition(e.target.value);
-            setOffset(0);
-          }}
-          aria-label="条件で絞り込み"
-        >
-          <option value="">すべての条件</option>
-          {conditions.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.label}
-            </option>
-          ))}
-        </select>
+        <span className="flex gap-2">
+          <select
+            className={`${inputClass} w-56`}
+            value={condition}
+            onChange={(e) => {
+              setCondition(e.target.value);
+              setOffset(0);
+            }}
+            aria-label="条件で絞り込み"
+          >
+            <option value="">すべての条件</option>
+            {conditions.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <input
+            className={`${inputClass} w-24`}
+            value={replicate}
+            onChange={(e) => {
+              setReplicate(e.target.value.replace(/\D/g, ''));
+              setOffset(0);
+            }}
+            placeholder="反復"
+            aria-label="反復で絞り込み"
+            inputMode="numeric"
+          />
+        </span>
       }
     >
       {error && <p className="mb-2 text-sm text-rose-300">{error}</p>}

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { getDataDir, getDatabaseUrl } from '../env';
-import { SCHEMA_STATEMENTS } from './schema';
+import { MIGRATIONS, SCHEMA_STATEMENTS } from './schema';
 
 // データベース接続。
 // - DATABASE_URL が設定されていれば PostgreSQL（Vercel では Neon などのマネージド Postgres）に接続する。
@@ -89,6 +89,11 @@ async function open(): Promise<Db> {
   await db.transaction(async (tx) => {
     await tx.query('SELECT pg_advisory_xact_lock(727001)');
     for (const statement of SCHEMA_STATEMENTS) await tx.query(statement);
+    await tx.query('CREATE TABLE IF NOT EXISTS rc_schema_migrations (id text PRIMARY KEY, description text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())');
+    for (const m of MIGRATIONS) {
+      for (const statement of m.statements) await tx.query(statement);
+      await tx.query('INSERT INTO rc_schema_migrations (id, description) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING', [m.id, m.description]);
+    }
   });
   return db;
 }

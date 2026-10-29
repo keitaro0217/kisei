@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Card, Loading, PageHeader, Table, td } from '@/components/research/ui';
+import { Alert, Badge, Button, Card, Field, inputClass, Loading, PageHeader, Table, td } from '@/components/research/ui';
 import { useBasicSettings } from '@/components/research/ResearchShell';
 import { api, formatDate } from '@/lib/research/client';
-import type { AuditEntry, SecurityStatus } from '@/lib/research/types';
+import type { AppSettings, AuditEntry, SecurityStatus } from '@/lib/research/types';
 
 const ok = 'bg-emerald-500/10 text-emerald-300 ring-emerald-400/30';
 const ng = 'bg-rose-500/10 text-rose-300 ring-rose-400/30';
@@ -19,6 +19,64 @@ function Row({ label, value, children }: { label: string; value: React.ReactNode
       </div>
       <div className="flex-shrink-0">{value}</div>
     </div>
+  );
+}
+
+const PAYLOAD_MODES: { value: AppSettings['observability']['tracePayloadMode']; label: string; hint: string }[] = [
+  { value: 'metadata', label: 'メタデータのみ', hint: 'プロンプト・応答の本文を保存しません（件数・トークン数・判定などの属性のみ）。' },
+  { value: 'redacted', label: '伏せ字で保存（推奨）', hint: 'APIキーの形式・メールアドレス・長い数字列などを伏せて保存します。' },
+  { value: 'full', label: 'そのまま保存', hint: '本文をそのまま保存します。機密情報を含む入力を扱う場合は選ばないでください。' },
+];
+
+function TraceSettingsCard() {
+  const [obs, setObs] = useState<AppSettings['observability'] | null>(null);
+  const [days, setDays] = useState('');
+  const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api<{ settings: AppSettings }>('/settings')
+      .then((r) => {
+        setObs(r.settings.observability);
+        setDays(String(r.settings.observability.traceRetentionDays));
+      })
+      .catch((e) => setMessage({ kind: 'error', text: e.message }));
+  }, []);
+  if (!obs) return null;
+  const save = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const r = await api<{ settings: AppSettings }>('/settings', { method: 'PUT', body: { observability: { tracePayloadMode: obs.tracePayloadMode, traceRetentionDays: Number(days) } } });
+      setObs(r.settings.observability);
+      setMessage({ kind: 'success', text: '保存しました。次に開始する研究から適用されます（開始済みの研究は開始時の設定のまま）。' });
+    } catch (e) {
+      setMessage({ kind: 'error', text: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title="実行トレースの記録" description="APIキーと Authorization ヘッダーは、どの設定でも記録しません。">
+      <div className="space-y-3 text-sm text-ink-100">
+        {PAYLOAD_MODES.map((m) => (
+          <label key={m.value} className="flex items-start gap-2">
+            <input type="radio" className="mt-1" checked={obs.tracePayloadMode === m.value} onChange={() => setObs({ ...obs, tracePayloadMode: m.value })} />
+            <span>
+              <span className="font-semibold text-white">{m.label}</span>
+              <br />
+              <span className="text-xs text-ink-200">{m.hint}</span>
+            </span>
+          </label>
+        ))}
+        <Field label="保存期間（日）" hint="期間を過ぎたトレースは自動で削除されます（1〜3650日）。">
+          <input className={`${inputClass} w-32`} value={days} onChange={(e) => setDays(e.target.value)} inputMode="numeric" />
+        </Field>
+        {message && <Alert kind={message.kind} title={message.text} />}
+        <Button variant="primary" busy={busy} onClick={save}>
+          保存
+        </Button>
+      </div>
+    </Card>
   );
 }
 
@@ -52,8 +110,8 @@ export default function SecurityPage() {
       )}
       <Card title="アクセス制御">
         <div className="divide-y divide-ink-800">
-          <Row label="Basic認証" value={<Badge className={s.basicAuth.enabled ? ok : warn}>{s.basicAuth.enabled ? '稼働中' : '無効（開発モード）'}</Badge>}>
-            画面・APIのすべてでパスワードによる認証を要求し、バックエンドの各エンドポイントでも再検証します。
+          <Row label="パスワード認証（ログイン画面）" value={<Badge className={s.basicAuth.enabled ? ok : warn}>{s.basicAuth.enabled ? '稼働中' : '無効（開発モード）'}</Badge>}>
+            画面・APIのすべてでログインを要求し、バックエンドの各エンドポイントでも再検証します。共有パスワード1つのため、個人ごとの権限やテナントの分離は未対応です。
           </Row>
           <Row label="HTTPSの強制" value={<Badge className={s.basicAuth.httpsEnforced ? ok : warn}>{s.basicAuth.httpsEnforced ? '有効' : '開発環境のため無効'}</Badge>}>
             本番環境ではHTTPS以外のアクセスをリダイレクト・拒否し、HSTSを付与します。
@@ -63,6 +121,7 @@ export default function SecurityPage() {
           </Row>
         </div>
       </Card>
+      <TraceSettingsCard />
       <Card title="API認証情報の管理状況">
         <div className="divide-y divide-ink-800">
           <Row label="保存時の暗号化" value={<Badge className={s.encryption.configured ? ok : ng}>{s.encryption.configured ? s.encryption.algorithm : '未設定'}</Badge>}>

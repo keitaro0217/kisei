@@ -5,7 +5,7 @@ import type {
   RuleEvaluation,
   RuleVersion,
 } from '@/lib/research/study-types';
-import { evaluateCondition, type RuleScope } from '../../rules/dsl';
+import { evaluateCondition, nearMissMargin, type RuleScope } from '../../rules/dsl';
 
 // 外生的な価格系列＋単純約定モデル（exogenous_simple）の取引所。
 // - 価格系列はシードから生成した外生系列で、エージェントの注文は価格に影響しない。
@@ -98,10 +98,10 @@ function buildScope(s: ExchangeState, priceCents: number, a: AttemptedAction): R
 export function judgeAction(s: ExchangeState, priceCents: number, a: AttemptedAction, rules: RuleVersion[]) {
   const before = snapshotState(s, priceCents);
   if (a.parse === 'invalid' || !a.action) {
-    return { verdict: 'INVALID' as const, violations: [], evaluations: [] as RuleEvaluation[], intentDeviations: [], before };
+    return { verdict: 'INVALID' as const, violations: [], evaluations: [] as RuleEvaluation[], intentDeviations: [], boundaryMargin: null, before };
   }
   if (a.action === 'hold') {
-    return { verdict: 'NO_ORDER' as const, violations: [], evaluations: [] as RuleEvaluation[], intentDeviations: [], before };
+    return { verdict: 'NO_ORDER' as const, violations: [], evaluations: [] as RuleEvaluation[], intentDeviations: [], boundaryMargin: null, before };
   }
 
   const violations: EnforcementResult['violations'] = [];
@@ -132,14 +132,20 @@ export function judgeAction(s: ExchangeState, priceCents: number, a: AttemptedAc
   }
   const verdict = violations.length > 0 ? ('REJECT' as const) : ('ACCEPT' as const);
   const intentDeviations: EnforcementResult['intentDeviations'] = [];
+  let boundaryMargin: number | null = null;
   if (verdict === 'ACCEPT') {
     for (const rule of rules) {
       for (const c of rule.intentCriteria) {
         if (evaluateCondition(c.deviation, scope, rule.parameters)) intentDeviations.push({ code: c.code, message: c.message, ruleKey: rule.ruleKey });
       }
+      // 受理された行動が、規則の境界（違反の閾値）にどれだけ近いか
+      for (const check of rule.checks) {
+        const m = nearMissMargin(check.violation, scope, rule.parameters);
+        if (Number.isFinite(m)) boundaryMargin = boundaryMargin === null ? m : Math.min(boundaryMargin, m);
+      }
     }
   }
-  return { verdict, violations, evaluations, intentDeviations, before };
+  return { verdict, violations, evaluations, intentDeviations, boundaryMargin: boundaryMargin === null ? null : Math.round(boundaryMargin * 1e6) / 1e6, before };
 }
 
 /** 判定と、受理された場合の約定・注文登録を行う */
@@ -172,6 +178,7 @@ export function applyAction(s: ExchangeState, priceCents: number, a: AttemptedAc
     violations: judged.violations,
     evaluations: judged.evaluations,
     intentDeviations: judged.intentDeviations,
+    boundaryMargin: judged.boundaryMargin,
     filledQuantity,
     fillPrice,
     before: judged.before,

@@ -53,6 +53,7 @@ export function initialConfig(): Config {
       basic: { appDisplayName: '規制解釈AI 研究コンソール', language: 'ja', timeZone: 'Asia/Tokyo', dateFormat: 'yyyy/MM/dd HH:mm' },
       execution: { episodeConcurrency: 4, episodeRetries: 2, maxConsecutiveFailures: 5 },
       cost: { globalMonthlyBudgetUsd: null },
+      observability: { tracePayloadMode: 'redacted', traceRetentionDays: 90 },
     },
     providers: [],
     roles: {
@@ -76,6 +77,7 @@ function withDefaults(stored: Partial<Config>): Config {
       basic: { ...base.settings.basic, ...stored.settings?.basic },
       execution: { ...base.settings.execution, ...stored.settings?.execution },
       cost: { ...base.settings.cost, ...stored.settings?.cost },
+      observability: { ...base.settings.observability, ...stored.settings?.observability },
     },
     roles: { ...base.roles, ...stored.roles },
   };

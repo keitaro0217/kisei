@@ -35,6 +35,8 @@ import {
   updateStudy,
 } from '../../storage/studyStore';
 import { contentHash } from '../../util/canonical';
+import { upsertTrace, type TraceFlags } from '../../storage/traceStore';
+import { Tracer } from '../trace/tracer';
 import { ValidationError } from '../providers';
 import { roleSnapshot } from '../snapshot';
 import { assertPricedWhenBudgeted } from '../usage';
@@ -232,7 +234,12 @@ export async function startStudy(id: string, actor: Principal): Promise<Study> {
     rules,
     promptSet,
     agentRole,
-    operational: { timeoutMs, maxRetries, sessionConcurrency: config.settings.execution.episodeConcurrency },
+    operational: {
+      timeoutMs,
+      maxRetries,
+      sessionConcurrency: config.settings.execution.episodeConcurrency,
+      tracePayloadMode: config.settings.observability.tracePayloadMode,
+    },
     codeVersion: codeVersion(),
     frozenAt: new Date().toISOString(),
   };
@@ -304,11 +311,30 @@ class SessionAborted extends Error {}
 
 type SessionOutcome = { decisions: DecisionRecord[]; finalValue: number; pnl: number };
 
-/** 1セッション（1条件 × 1反復）を実行する。凍結した設定だけを使う */
+/** トレースの記録モード（このバージョンより前に凍結した研究は本文を保存しない） */
+export const tracePayloadModeOf = (study: Study) => study.frozen?.operational.tracePayloadMode ?? 'metadata';
+
+/** 境界付近とみなす閾値までの相対距離 */
+export const BOUNDARY_THRESHOLD = 0.1;
+
+export function traceFlagsOf(decisions: DecisionRecord[], model: string | null): TraceFlags {
+  return {
+    hasViolation: decisions.some((d) => d.enforcement.violations.some((v) => v.ruleKey !== null)),
+    hasDeviation: decisions.some((d) => d.enforcement.intentDeviations.length > 0),
+    hasBoundary: decisions.some((d) => d.enforcement.boundaryMargin != null && d.enforcement.boundaryMargin <= BOUNDARY_THRESHOLD),
+    model,
+  };
+}
+
+/**
+ * 1セッション（1条件 × 1反復）を実行する。凍結した設定だけを使う。
+ * tracer を渡すと、市場の観測・規則の提示・モデル呼び出し・注文・評価を Span として記録する。
+ */
 export async function runStudySession(
   study: Study,
   session: Pick<StudySession, 'conditionId' | 'replicate' | 'seed'>,
   shouldContinue: () => Promise<boolean> = async () => true,
+  tracer: Tracer = new Tracer({ studyId: study.id, conditionId: session.conditionId, replicate: session.replicate }, 'metadata'),
 ): Promise<SessionOutcome> {
   const frozen = study.frozen!;
   const { market } = frozen.design;
@@ -319,23 +345,62 @@ export async function runStudySession(
   const state = initialExchangeState(market.initialCash, market.initialPrice);
   const decisions: DecisionRecord[] = [];
   const isMock = frozen.agentRole === null;
+  const model = isMock ? 'mock' : frozen.agentRole!.model;
+  const ruleRefs = rules.map((r) => `${r.ruleKey}@v${r.version}`);
+
+  const root = tracer.start(`session ${condition.id}#${session.replicate}`, 'episode', null, {
+    studyId: study.id,
+    conditionId: condition.id,
+    replicate: session.replicate,
+    seed: session.seed,
+    model,
+    agent: isMock ? 'mock' : 'model',
+    providerType: frozen.agentRole?.providerType ?? null,
+    rules: ruleRefs,
+    promptSet: `${frozen.promptSet.name}@v${frozen.promptSet.version}`,
+    frozenHash: study.frozenHash ?? null,
+  });
 
   for (let step = 0; step < market.steps; step++) {
     if (!(await shouldContinue())) throw new SessionAborted();
+    const stepSpan = tracer.start(`step ${step + 1}`, 'step', root, { step });
     const priceCents = centsOf(prices[step]);
     state.step = step;
-    settleRestingOrders(state, priceCents);
+    const observe = tracer.start('observe market', 'market.observe', stepSpan, { marketStateId: `${session.seed}:${step}`, price: prices[step] });
+    const settled = settleRestingOrders(state, priceCents);
+    if (settled.filled.length || settled.cancelled.length) {
+      const fill = tracer.start('match resting orders', 'market.settle', observe, {
+        filled: settled.filled.map((f) => `${f.id}:${f.side}:${f.quantity}@${f.priceCents / 100}`),
+        cancelled: settled.cancelled,
+      });
+      tracer.end(fill);
+    }
     const context = {
       price: prices[step],
       lastTradePrice: state.lastTradeCents / 100,
       cash: state.cashCents / 100,
       position: state.position,
       openOrders: state.openOrders.map((o) => ({ id: o.id, side: o.side, quantity: o.quantity, limitPrice: o.limitCents / 100, placedStep: o.placedStep })),
+      cancelsThisSession: state.cancelsThisSession,
+      nextOrderNo: state.nextOrderNo,
     };
+    tracer.end(observe, { attributes: { lastTradePrice: context.lastTradePrice, cash: context.cash, position: context.position, openOrders: context.openOrders.length } });
+
+    // 規則の提示（この版では検索は行わず、条件で選んだ規則の版をそのまま提示する）
+    const retrieval = tracer.start('present regulations', 'retrieval', stepSpan, {
+      documents: ruleRefs,
+      presented: condition.presentRules,
+      purposePresented: condition.includePurpose,
+      retrievalMethod: 'fixed_by_condition',
+    });
+    tracer.end(retrieval);
+
     let text: string;
     let usage: DecisionRecord['usage'] = null;
+    const llm = tracer.start(isMock ? 'mock agent decision' : 'llm decision', 'llm', stepSpan, { model, mock: isMock });
     if (isMock) {
       text = mockTraderResponse(session.seed, step, { price: context.price, position: context.position, cash: context.cash, openOrders: state.openOrders });
+      tracer.end(llm, { output: text });
     } else {
       const prompt = buildTraderPrompt({
         promptSet: frozen.promptSet,
@@ -355,26 +420,64 @@ export async function runStudySession(
         openOrders: state.openOrders,
       });
       const role = frozen.agentRole!;
-      const res = await invokeModel({
-        providerId: role.providerId,
-        model: role.model,
-        reasoning: role.reasoning,
-        maxOutputTokens: role.maxOutputTokens,
-        system: prompt.system,
-        user: prompt.user,
-        purpose: 'trading_agent',
-        experimentId: null,
-        episodeIndex: null,
-        snapshot: role,
-        timeoutMs: frozen.operational.timeoutMs,
-        maxRetries: frozen.operational.maxRetries,
-      });
-      text = res.text;
-      usage = { inputTokens: res.usage.inputTokens, outputTokens: res.usage.outputTokens, costUsd: res.record.costUsd };
+      try {
+        const res = await invokeModel({
+          providerId: role.providerId,
+          model: role.model,
+          reasoning: role.reasoning,
+          maxOutputTokens: role.maxOutputTokens,
+          system: prompt.system,
+          user: prompt.user,
+          purpose: 'trading_agent',
+          experimentId: null,
+          episodeIndex: null,
+          snapshot: role,
+          timeoutMs: frozen.operational.timeoutMs,
+          maxRetries: frozen.operational.maxRetries,
+        });
+        text = res.text;
+        usage = { inputTokens: res.usage.inputTokens, outputTokens: res.usage.outputTokens, costUsd: res.record.costUsd };
+        tracer.end(llm, {
+          attributes: { inputTokens: res.usage.inputTokens, outputTokens: res.usage.outputTokens, costUsd: res.record.costUsd, latencyMs: res.latencyMs, attempts: res.attempts },
+          input: `[system]\n${prompt.system}\n\n[user]\n${prompt.user}`,
+          output: text,
+        });
+      } catch (e) {
+        const err = toLlmError(e);
+        tracer.end(llm, { error: { type: err.category, message: err.message } });
+        throw e;
+      }
     }
     const { attempted, reasoning } = parseTraderResponse(text);
     // 判定には規則エンジンだけを使い、AIの「適法である」という主張（reasoning）は渡さない
+    const order = tracer.start(`order ${attempted.action ?? 'invalid'}`, 'order', stepSpan, {
+      action: attempted.action,
+      orderType: attempted.orderType,
+      quantity: attempted.quantity,
+      limitPrice: attempted.limitPrice,
+      cancelOrderId: attempted.cancelOrderId,
+      parse: attempted.parse,
+    });
     const enforcement = applyAction(state, priceCents, attempted, rules);
+    tracer.end(order, {
+      attributes: { verdict: enforcement.verdict, filledQuantity: enforcement.filledQuantity, fillPrice: enforcement.fillPrice },
+      ...(attempted.parseError ? { error: { type: 'parse_error', message: attempted.parseError } } : {}),
+    });
+    const formal = tracer.start('formal evaluator', 'evaluation.formal', stepSpan, {
+      verdict: enforcement.verdict,
+      violationCodes: enforcement.violations.map((v) => v.code),
+      ruleViolation: enforcement.violations.some((v) => v.ruleKey !== null),
+      checksEvaluated: enforcement.evaluations.length,
+      boundaryMargin: enforcement.boundaryMargin ?? null,
+    });
+    tracer.end(formal);
+    const intent = tracer.start('intent criteria', 'evaluation.intent', stepSpan, {
+      deviationCodes: enforcement.intentDeviations.map((d) => d.code),
+      selfAssessedCompliance: reasoning.selfAssessedCompliance,
+      citedRules: reasoning.citedRules,
+    });
+    tracer.end(intent);
+    tracer.end(stepSpan, { attributes: { verdict: enforcement.verdict } });
     decisions.push({
       studyId: study.id,
       conditionId: condition.id,
@@ -394,7 +497,9 @@ export async function runStudySession(
   }
   const finalCents = centsOf(prices[prices.length - 1]);
   const finalValue = markToMarket(state, finalCents);
-  return { decisions, finalValue, pnl: Math.round((finalValue - market.initialCash) * 100) / 100 };
+  const pnl = Math.round((finalValue - market.initialCash) * 100) / 100;
+  tracer.end(root, { attributes: { finalValue, pnl, decisions: decisions.length } });
+  return { decisions, finalValue, pnl };
 }
 
 /** 研究を1スライス分処理する。'more' は時間切れで処理が残っていることを示す */
@@ -424,15 +529,26 @@ export async function runStudySlice(id: string, deadline: number): Promise<'done
       await Promise.all(
         claimed.map(async (s) => {
           const startedAt = new Date().toISOString();
+          const tracer = new Tracer({ studyId: id, conditionId: s.conditionId, replicate: s.replicate }, tracePayloadModeOf(study));
+          const model = study.frozen?.agentRole?.model ?? 'mock';
           try {
-            const out = await runStudySession(study, s, shouldContinue);
-            await completeSession(s, owner, out.decisions, { startedAt, finishedAt: new Date().toISOString(), finalValue: out.finalValue, pnl: out.pnl, error: null });
+            const out = await runStudySession(study, s, shouldContinue, tracer);
+            await completeSession(
+              s,
+              owner,
+              out.decisions,
+              { startedAt, finishedAt: new Date().toISOString(), finalValue: out.finalValue, pnl: out.pnl, error: null },
+              { record: tracer.record(), flags: traceFlagsOf(out.decisions, model) },
+            );
           } catch (e) {
             if (e instanceof SessionAborted) {
               await finishSession(s, owner, 'pending', { error: null });
               return;
             }
             const err = toLlmError(e);
+            // 失敗したセッションも、原因の調査のためにトレースを残す
+            tracer.failOpen({ type: err.category, message: err.message });
+            await upsertTrace(tracer.record(), traceFlagsOf([], model)).catch(() => undefined);
             if (FATAL.includes(err.category)) {
               fatal ??= `${errorCategoryLabels[err.category]}: ${err.message}`;
               await finishSession(s, owner, 'pending', { error: null });

@@ -18,9 +18,9 @@ export function PageHeader({ title, description, actions }: { title: string; des
   );
 }
 
-export function Card({ title, description, actions, children, className = '' }: { title?: string; description?: string; actions?: ReactNode; children: ReactNode; className?: string }) {
+export function Card({ id, title, description, actions, children, className = '' }: { id?: string; title?: string; description?: string; actions?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={`rc-glass rounded-xl ${className}`}>
+    <section id={id} className={`rc-glass rounded-xl ${className}`}>
       {(title || actions) && (
         <header className="flex flex-col gap-2 border-b border-white/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
