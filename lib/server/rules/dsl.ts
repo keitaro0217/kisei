@@ -29,7 +29,8 @@ const ARITH_OPS = new Set(['add', 'sub', 'mul', 'abs']);
 const CODE_PATTERN = /^[A-Z][A-Z0-9_]{1,47}$/;
 const PARAM_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,47}$/;
 
-type Counter = { nodes: number };
+/** nodes: 要素数の上限の数え上げ / vars: 参照できる変数（ドメインごとのホワイトリスト。既定は金融市場） */
+type Counter = { nodes: number; vars?: Record<string, string> };
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -45,7 +46,7 @@ function validateExpr(node: unknown, params: Record<string, number>, path: strin
   if (!isObject(node)) throw new RuleDslError('式はオブジェクトで指定してください', path);
   if ('var' in node) {
     onlyKeys(node, ['var'], path);
-    if (typeof node.var !== 'string' || !(node.var in RULE_VARIABLES)) throw new RuleDslError(`変数「${String(node.var)}」は使用できません`, path);
+    if (typeof node.var !== 'string' || !(node.var in (counter.vars ?? RULE_VARIABLES))) throw new RuleDslError(`変数「${String(node.var)}」は使用できません`, path);
     return { var: node.var as RuleVariable };
   }
   if ('const' in node) {
@@ -139,7 +140,7 @@ function validateMessage(message: unknown, path: string): string {
   return message.trim();
 }
 
-export function validateChecks(input: unknown, params: Record<string, number>): EnforcementCheck[] {
+export function validateChecks(input: unknown, params: Record<string, number>, vars?: Record<string, string>): EnforcementCheck[] {
   if (input === undefined || input === null) return [];
   if (!Array.isArray(input) || input.length > 20) throw new RuleDslError('判定は20個までの配列で指定してください', 'checks');
   return input.map((c, i) => {
@@ -149,12 +150,12 @@ export function validateChecks(input: unknown, params: Record<string, number>): 
     return {
       code: validateCode(c.code, `${path}.code`),
       message: validateMessage(c.message, `${path}.message`),
-      violation: validateCondition(c.violation, params, `${path}.violation`, 0, { nodes: 0 }),
+      violation: validateCondition(c.violation, params, `${path}.violation`, 0, { nodes: 0, vars }),
     };
   });
 }
 
-export function validateIntentCriteria(input: unknown, params: Record<string, number>): IntentCriterion[] {
+export function validateIntentCriteria(input: unknown, params: Record<string, number>, vars?: Record<string, string>): IntentCriterion[] {
   if (input === undefined || input === null) return [];
   if (!Array.isArray(input) || input.length > 20) throw new RuleDslError('趣旨逸脱の基準は20個までの配列で指定してください', 'intentCriteria');
   return input.map((c, i) => {
@@ -164,7 +165,7 @@ export function validateIntentCriteria(input: unknown, params: Record<string, nu
     return {
       code: validateCode(c.code, `${path}.code`),
       message: validateMessage(c.message, `${path}.message`),
-      deviation: validateCondition(c.deviation, params, `${path}.deviation`, 0, { nodes: 0 }),
+      deviation: validateCondition(c.deviation, params, `${path}.deviation`, 0, { nodes: 0, vars }),
     };
   });
 }
@@ -177,7 +178,7 @@ export type RuleScope = Record<RuleVariable, number | string | boolean>;
 const roundNum = (n: number) => Math.round(n * 1e6) / 1e6;
 
 function evalExpr(expr: RuleExpr, scope: RuleScope, params: Record<string, number>): number | string | boolean {
-  if ('var' in expr) return scope[expr.var];
+  if ('var' in expr) return (scope as Record<string, number | string | boolean>)[expr.var];
   if ('const' in expr) return expr.const;
   if ('param' in expr) return params[expr.param];
   const values = expr.args.map((a) => evalExpr(a, scope, params));

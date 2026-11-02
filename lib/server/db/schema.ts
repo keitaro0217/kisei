@@ -424,4 +424,75 @@ export const MIGRATIONS: Migration[] = [
       `CREATE TRIGGER rc_labels_frozen BEFORE INSERT OR UPDATE OR DELETE ON rc_labels FOR EACH ROW EXECUTE FUNCTION rc_protect_frozen_labels()`,
     ],
   },
+  {
+    id: '2026-11-05-001-universal-domain',
+    description: '規則文書（出典・適用期間・種別・ハッシュ）と規則の要素（根拠の位置・レビュー）、規則の目的（承認）、業務プロセス、金融以外のドメインのステップの記録',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS rc_rule_documents (
+         id text PRIMARY KEY,
+         project_id text NOT NULL DEFAULT 'default' REFERENCES rc_projects(id) ON DELETE RESTRICT,
+         doc_key text NOT NULL,
+         version integer NOT NULL CHECK (version >= 1),
+         kind text NOT NULL CHECK (kind IN ('synthetic', 'real_law', 'internal_policy')),
+         format text NOT NULL CHECK (format IN ('text', 'docx')),
+         sha256 text NOT NULL,
+         effective_from date,
+         effective_to date,
+         created_at timestamptz NOT NULL DEFAULT now(),
+         data jsonb NOT NULL,
+         UNIQUE (project_id, doc_key, version),
+         CHECK (effective_to IS NULL OR effective_from IS NULL OR effective_to >= effective_from)
+       )`,
+      // 文書は版ごとに不変（変更は新しい版）
+      `DROP TRIGGER IF EXISTS rc_rule_documents_immutable ON rc_rule_documents`,
+      `CREATE TRIGGER rc_rule_documents_immutable BEFORE UPDATE OR DELETE ON rc_rule_documents FOR EACH ROW EXECUTE FUNCTION rc_reject_change()`,
+      `CREATE TABLE IF NOT EXISTS rc_rule_elements (
+         id text PRIMARY KEY,
+         document_id text NOT NULL REFERENCES rc_rule_documents(id) ON DELETE RESTRICT,
+         kind text NOT NULL CHECK (kind IN ('obligation', 'prohibition', 'permission', 'exception', 'threshold', 'approval_condition', 'definition', 'purpose_candidate')),
+         span_start integer NOT NULL CHECK (span_start >= 0),
+         span_end integer NOT NULL,
+         extraction_method text NOT NULL CHECK (extraction_method IN ('pattern-v1', 'human')),
+         review_state text NOT NULL DEFAULT 'unreviewed' CHECK (review_state IN ('unreviewed', 'approved', 'rejected', 'edited')),
+         data jsonb NOT NULL,
+         CHECK (span_end >= span_start)
+       )`,
+      `CREATE INDEX IF NOT EXISTS rc_rule_elements_doc_idx ON rc_rule_elements (document_id, span_start)`,
+      `CREATE TABLE IF NOT EXISTS rc_policy_intents (
+         id text PRIMARY KEY,
+         rule_key text NOT NULL,
+         version integer NOT NULL CHECK (version >= 1),
+         basis text NOT NULL CHECK (basis IN ('extracted', 'human_entered')),
+         document_id text REFERENCES rc_rule_documents(id) ON DELETE RESTRICT,
+         evidence_element_id text REFERENCES rc_rule_elements(id) ON DELETE RESTRICT,
+         status text NOT NULL CHECK (status IN ('candidate', 'approved', 'rejected')),
+         created_at timestamptz NOT NULL DEFAULT now(),
+         data jsonb NOT NULL,
+         UNIQUE (rule_key, version),
+         -- 原文から抽出した目的は、根拠（要素）を必ず持つ
+         CHECK (basis = 'human_entered' OR evidence_element_id IS NOT NULL)
+       )`,
+      `CREATE TABLE IF NOT EXISTS rc_business_processes (
+         id text PRIMARY KEY,
+         project_id text NOT NULL DEFAULT 'default' REFERENCES rc_projects(id) ON DELETE RESTRICT,
+         process_key text NOT NULL,
+         version integer NOT NULL CHECK (version >= 1),
+         domain text NOT NULL,
+         created_at timestamptz NOT NULL DEFAULT now(),
+         data jsonb NOT NULL,
+         UNIQUE (project_id, process_key, version)
+       )`,
+      // 金融以外のドメインのステップの記録（金融市場は従来どおり rc_decisions）。判断の記録と同じく追記のみ・完了後は削除不可
+      `CREATE TABLE IF NOT EXISTS rc_domain_steps (
+         study_id text NOT NULL REFERENCES rc_studies(id) ON DELETE CASCADE,
+         condition_id text NOT NULL,
+         replicate integer NOT NULL,
+         step integer NOT NULL,
+         data jsonb NOT NULL,
+         PRIMARY KEY (study_id, condition_id, replicate, step)
+       )`,
+      `DROP TRIGGER IF EXISTS rc_domain_steps_protect ON rc_domain_steps`,
+      `CREATE TRIGGER rc_domain_steps_protect BEFORE UPDATE OR DELETE ON rc_domain_steps FOR EACH ROW EXECUTE FUNCTION rc_protect_decisions()`,
+    ],
+  },
 ];

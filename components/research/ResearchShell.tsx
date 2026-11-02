@@ -40,6 +40,7 @@ type NavItem = { href: string; label: string; icon: string; exact?: boolean; gro
 const nav: NavItem[] = [
   { group: '概要', href: '/research', label: 'ダッシュボード', icon: icons.dashboard, exact: true },
   { group: '概要', href: '/research/poc', label: 'Business Impact', icon: icons.impact },
+  { group: '研究', href: '/research/studio', label: 'Rule & Intent Studio', icon: icons.studies },
   { group: '研究', href: '/research/studies', label: '研究プロジェクト', icon: icons.studies },
   { group: '研究', href: '/research/compare', label: '研究の比較', icon: icons.simulation },
   { group: '研究', href: '/research/rules', label: '規則・条文', icon: icons.rules },

@@ -10,6 +10,7 @@ import type {
 import { audit } from '../../audit';
 import type { Principal } from '../../auth';
 import { RuleDslError, validateChecks, validateIntentCriteria, validateParameters } from '../../rules/dsl';
+import { DOMAINS, domainOf } from '@/lib/domain/descriptors';
 import {
   getPromptSet,
   getRuleVersions,
@@ -46,10 +47,16 @@ function text(v: unknown, field: string, max: number, required = false): string 
 export function parseRuleDefinition(input: Record<string, unknown>): RuleDefinition {
   const ruleKey = text(input.ruleKey, 'ruleKey', 40, true);
   if (!RULE_KEY.test(ruleKey)) throw new ValidationError('規則IDは英字で始まる英数字・-・_（2〜40文字）にしてください。', 'ruleKey');
+  const domain = input.domain === undefined || input.domain === null || input.domain === '' ? 'financial_market' : domainOf(String(input.domain))?.id;
+  if (!domain) throw new ValidationError('ドメイン（評価環境）が正しくありません。', 'domain');
+  const vars = DOMAINS[domain].variables;
   try {
     const parameters = validateParameters(input.parameters);
     return {
       ruleKey,
+      ...(domain !== 'financial_market' ? { domain } : {}),
+      ...(typeof input.sourceDocumentId === 'string' && input.sourceDocumentId ? { sourceDocumentId: input.sourceDocumentId.slice(0, 80) } : {}),
+      ...(Array.isArray(input.sourceElementIds) ? { sourceElementIds: input.sourceElementIds.filter((x): x is string => typeof x === 'string').slice(0, 50) } : {}),
       name: text(input.name, 'name', 120, true),
       industry: text(input.industry, 'industry', 80),
       market: text(input.market, 'market', 80),
@@ -61,8 +68,8 @@ export function parseRuleDefinition(input: Record<string, unknown>): RuleDefinit
       exceptions: text(input.exceptions, 'exceptions', 2000),
       references: text(input.references, 'references', 2000),
       parameters,
-      checks: validateChecks(input.checks, parameters),
-      intentCriteria: validateIntentCriteria(input.intentCriteria, parameters),
+      checks: validateChecks(input.checks, parameters, vars),
+      intentCriteria: validateIntentCriteria(input.intentCriteria, parameters, vars),
     };
   } catch (e) {
     if (e instanceof RuleDslError) throw new ValidationError(`判定ロジックが正しくありません（${e.message}）`, e.path);

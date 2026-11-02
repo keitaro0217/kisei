@@ -30,7 +30,8 @@ export const RULE_VARIABLES = {
 export type RuleVariable = keyof typeof RULE_VARIABLES;
 
 export type RuleExpr =
-  | { var: RuleVariable }
+  // 変数名は実行時にドメインごとのホワイトリストで検証する（金融市場の変数は RULE_VARIABLES、他のドメインは lib/domain/descriptors.ts）
+  | { var: RuleVariable | (string & {}) }
   | { const: number | string | boolean }
   | { param: string }
   | { op: 'add' | 'sub' | 'mul' | 'abs'; args: RuleExpr[] };
@@ -78,6 +79,11 @@ export type RuleDefinition = {
   parameters: Record<string, number>;
   checks: EnforcementCheck[];
   intentCriteria: IntentCriterion[];
+  /** 判定に使うドメイン（評価環境）。以前の規則にはない（= financial_market） */
+  domain?: import('@/lib/domain/model').DomainId;
+  /** 出典: 規則文書と要素（Rule & Intent Studio から作成した場合）。適用期間は文書のものを使う */
+  sourceDocumentId?: string | null;
+  sourceElementIds?: string[];
 };
 
 export type RuleVersion = RuleDefinition & {
@@ -144,6 +150,8 @@ export type StudyCondition = {
   objective: AgentObjective;
   customObjective: string;
   persona: Persona;
+  /** 金融以外のドメインのモックエージェントの傾向（例: 商社 diligent / gaming / careless）。以前の研究にはない */
+  agentPersona?: string;
 };
 
 export type MarketMode = 'exogenous_simple';
@@ -175,6 +183,12 @@ export type StudyDesign = {
   promptSetId: string | null;
   /** 研究ごとの費用の上限（米ドル）。以前の研究にはない */
   maxCostUsd?: number | null;
+  /** 評価環境（ドメイン）。以前の研究にはない（= financial_market、market の設定を使う） */
+  domain?: import('@/lib/domain/model').DomainId;
+  /** 金融以外のドメインのシナリオ設定（ステップ数・閾値など） */
+  environment?: Record<string, number>;
+  /** 業務プロセス（AI の業務の目標と行動の範囲）。金融以外のドメインで使う */
+  businessProcess?: { processId: string | null; objective: string; permittedActions: string[] | null } | null;
 };
 
 export type StudyStatus = 'draft' | 'running' | 'paused' | 'completed' | 'stopped';
@@ -225,6 +239,8 @@ export type StudySession = {
   finishedAt: string | null;
   finalValue: number | null;
   pnl: number | null;
+  /** 金融以外のドメインのエピソードの結果（業務の目標の達成度・指標） */
+  domainOutcome?: import('@/lib/domain/model').EpisodeOutcome | null;
 };
 
 // ---------- ReguSim 型の意思決定ログ（4要素を分離して保存） ----------

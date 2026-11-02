@@ -6,6 +6,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import DecisionLog, { type DecisionFocus } from '@/components/research/DecisionLog';
 import StudyChart from '@/components/research/StudyChart';
 import StudyCostCard from '@/components/research/StudyCostCard';
+import DomainStatsCard from '@/components/research/DomainStatsCard';
+import { domainOf } from '@/lib/domain/descriptors';
 import { Alert, Badge, Button, Card, Loading, PageHeader, Stat, Table, td } from '@/components/research/ui';
 import { useBasicSettings } from '@/components/research/ResearchShell';
 import { api, formatDate } from '@/lib/research/client';
@@ -16,7 +18,7 @@ import type { LogisticResult } from '@/lib/server/research/study/regression';
 import { ForestPlot, StepSeries } from '@/components/research/ComparisonCharts';
 
 type Liveness = { state: 'active' | 'waiting' | 'stalled' | 'idle'; lastActivityAt: string | null; remaining: number };
-type Detail = { study: Study; sessions: StudySession[]; liveness?: Liveness; stats: StudyStats | null; regression: LogisticResult | null };
+type Detail = { study: Study; sessions: StudySession[]; liveness?: Liveness; stats: StudyStats | null; regression: LogisticResult | null; domainStats?: React.ComponentProps<typeof DomainStatsCard>['stats'] };
 
 const pct = (p: number | null) => (p === null ? '—' : `${(p * 100).toFixed(1)}%`);
 const ci = (c: [number, number] | null) => (c ? `[${(c[0] * 100).toFixed(1)}, ${(c[1] * 100).toFixed(1)}]` : '');
@@ -177,7 +179,11 @@ export default function StudyPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Stat label="状態" value={<Badge className={status.className}>{status.label}</Badge>} sub={study.startedAt ? `開始 ${formatDate(study.startedAt, basic)}` : '未開始'} />
           <Stat label="セッションの進捗" value={`${done} / ${sessions.length || d.conditions.length * d.replicates}`} sub={failed ? `失敗 ${failed} 件（結果から除外）` : '条件 × 反復'} />
-          <Stat label="判断の記録数" value={(stats?.conditions.reduce((a, c) => a + c.decisions, 0) ?? 0).toLocaleString()} sub={`${d.market.steps} ステップ / セッション`} />
+          {d.domain && d.domain !== 'financial_market' ? (
+            <Stat label="評価環境" value={domainOf(d.domain)?.label ?? d.domain} sub={`${d.environment?.steps ?? '—'} ステップ / セッション`} />
+          ) : (
+            <Stat label="判断の記録数" value={(stats?.conditions.reduce((a, c) => a + c.decisions, 0) ?? 0).toLocaleString()} sub={`${d.market.steps} ステップ / セッション`} />
+          )}
           <Stat label="エージェント" value={study.isMock ? 'モック' : (study.frozen?.agentRole?.model ?? 'AIモデル')} sub={study.frozen?.agentRole?.providerName ?? (study.isMock ? 'APIキー不要' : '開始時に固定')} />
         </div>
         {sessions.length > 0 && (
@@ -186,6 +192,7 @@ export default function StudyPage() {
           </div>
         )}
 
+        {data.domainStats && <DomainStatsCard stats={data.domainStats} />}
         {!study.isMock && <StudyCostCard studyId={id} editable={study.status !== 'completed' && study.status !== 'stopped'} refreshKey={`${study.status}:${done}`} />}
 
         <Card title="研究デザイン" description={study.frozen ? '開始時に凍結した内容です。変更できません。' : '下書きです。開始すると凍結されます。'}>
@@ -206,7 +213,9 @@ export default function StudyPage() {
             <div>
               <dt className="text-xs text-ink-300">市場</dt>
               <dd className="text-ink-100">
-                外生価格＋単純約定・{d.market.steps}ステップ・初期価格 {d.market.initialPrice}・ボラティリティ {d.market.volatility}・反復 {d.replicates} 回・基準シード {d.baseSeed}
+                {d.domain && d.domain !== 'financial_market'
+                  ? `${domainOf(d.domain)?.label ?? d.domain}・${Object.entries(d.environment ?? {}).map(([k, v]) => `${k} ${v}`).join('・')}・反復 ${d.replicates} 回・基準シード ${d.baseSeed}${d.businessProcess?.objective ? `・業務の目標「${d.businessProcess.objective}」` : ''}`
+                  : `外生価格＋単純約定・${d.market.steps}ステップ・初期価格 ${d.market.initialPrice}・ボラティリティ ${d.market.volatility}・反復 ${d.replicates} 回・基準シード ${d.baseSeed}`}
               </dd>
             </div>
             <div>
@@ -231,8 +240,8 @@ export default function StudyPage() {
                   </td>
                   <td className={td}>{c.presentRules ? '提示' : '提示しない'}</td>
                   <td className={td}>{c.includePurpose ? '提示' : '—'}</td>
-                  <td className={td}>{objectiveLabels[c.objective]}</td>
-                  <td className={td}>{personaLabels[c.persona]}</td>
+                  <td className={td}>{d.domain && d.domain !== 'financial_market' ? (d.businessProcess?.objective ?? '—') : objectiveLabels[c.objective]}</td>
+                  <td className={td}>{d.domain && d.domain !== 'financial_market' ? `モック: ${c.agentPersona ?? 'diligent'}` : personaLabels[c.persona]}</td>
                 </tr>
               ))}
             </Table>
