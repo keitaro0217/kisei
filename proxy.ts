@@ -6,6 +6,9 @@ import { configProblemsResponse } from '@/lib/server/configStatus';
 import { authFailureLimiter, clientKey, isCrossSiteWrite } from '@/lib/server/security/requestGuards';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+/** 公開する研究デモのページ（API は含めない） */
+const isPublicDemoPath = (p: string) => p === '/demo/research' || p.startsWith('/demo/research/');
+
 const PUBLIC_PATHS = new Set(['/login', '/api/auth/login', '/api/auth/logout', '/api/health']);
 
 function withSecurityHeaders(response: NextResponse, production: boolean): NextResponse {
@@ -57,7 +60,8 @@ export function proxy(request: NextRequest) {
   }
 
   // ログイン画面とログイン・ログアウトの API は認証なしで表示する（照合と総当たり対策は API 側で行う）
-  if (PUBLIC_PATHS.has(request.nextUrl.pathname)) {
+  // 研究デモ（/demo/research）は、ブラウザ内だけで動く合成シミュレーション（API・DB・秘密情報を使わない）のため、ログインなしで公開する
+  if (PUBLIC_PATHS.has(request.nextUrl.pathname) || isPublicDemoPath(request.nextUrl.pathname)) {
     return withSecurityHeaders(NextResponse.next(), production);
   }
 
