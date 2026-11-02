@@ -7,26 +7,44 @@ import { getConfig, type Config } from '../storage/store';
 import { buildRuleDocument, RULE_DOCUMENT_VERSION } from './sim/market';
 import { DECISION_FORMAT, JUDGE_SYSTEM, PROMPT_VERSION, TOOL_VERSION, TRADING_AGENT_SYSTEM } from './sim/prompts';
 
-export function roleSnapshot(state: Config, role: ResearchRole): RoleSnapshot {
-  const assignment = state.roles[role];
-  const label = roleLabels[role].label;
-  if (!assignment.providerId || !assignment.model) {
-    throw new LlmError('not_configured', `「${label}」のプロバイダーとモデルが設定されていません。設定 → モデル割り当てで設定してください。`);
+/**
+ * 指定したプロバイダーとモデルの設定を固定する（APIキーは含めない）。
+ * 研究での利用が無効なプロバイダー・APIキーのないプロバイダーは使えない。
+ */
+export function providerSnapshot(state: Config, providerId: string, model: string, opts: { label: string; maxOutputTokens: number; reasoning?: RoleSnapshot['reasoning'] }): RoleSnapshot {
+  const provider = state.providers.find((p) => p.id === providerId);
+  if (!provider) throw new LlmError('not_configured', `「${opts.label}」に指定した接続先が見つかりません（削除された可能性があります）。`);
+  if (provider.researchEnabled === false) {
+    throw new LlmError('not_configured', `「${provider.name}」は研究での利用が無効になっています。設定 → API連携で有効にしてください。`);
   }
-  const provider = state.providers.find((p) => p.id === assignment.providerId);
-  if (!provider) throw new LlmError('not_configured', `「${label}」に割り当てたプロバイダーが見つかりません。`);
   if (apiKeyRequired[provider.type] && !provider.encryptedApiKey) {
     throw new LlmError('not_configured', `「${provider.name}」のAPIキーが登録されていません。設定 → API連携で登録してください。`);
+  }
+  if (provider.connection.status === 'failed') {
+    throw new LlmError('not_configured', `「${provider.name}」は前回の接続テストに失敗しています。設定 → API連携で接続テストを実行し、成功してから開始してください。`);
   }
   return {
     providerId: provider.id,
     providerType: provider.type,
     providerName: provider.name,
     baseUrl: provider.baseUrl,
-    model: assignment.model,
-    reasoning: structuredClone(assignment.reasoning),
-    maxOutputTokens: assignment.maxOutputTokens,
+    model,
+    reasoning: structuredClone(opts.reasoning ?? {}),
+    maxOutputTokens: opts.maxOutputTokens,
   };
+}
+
+/** 用途（役割）のモデル設定を固定する。用途の割り当てがなければ kisei 全体のデフォルトのモデルを使う */
+export function roleSnapshot(state: Config, role: ResearchRole): RoleSnapshot {
+  const assignment = state.roles[role];
+  const label = roleLabels[role].label;
+  if (assignment.providerId && assignment.model) {
+    return providerSnapshot(state, assignment.providerId, assignment.model, { label, maxOutputTokens: assignment.maxOutputTokens, reasoning: assignment.reasoning });
+  }
+  if (state.defaultModel) {
+    return providerSnapshot(state, state.defaultModel.providerId, state.defaultModel.model, { label, maxOutputTokens: assignment.maxOutputTokens });
+  }
+  throw new LlmError('not_configured', `「${label}」に使うモデルが設定されていません。設定 → API連携でAPIキーを登録し、デフォルトのモデルを選んでください。`);
 }
 
 /** 実験開始時点のモデル設定・プロンプト・ツール構成を固定する（APIキーは含めない） */

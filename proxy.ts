@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateHeaders, unauthorizedResponse } from '@/lib/server/auth';
+import { authenticateHeaders, getAuthProvider, unauthorizedResponse } from '@/lib/server/auth';
+import { sessionCookieHeader } from '@/lib/server/auth/session';
 import { isProduction, validateRequiredEnv } from '@/lib/server/env';
 import { configProblemsResponse } from '@/lib/server/configStatus';
 import { authFailureLimiter, clientKey, isCrossSiteWrite } from '@/lib/server/security/requestGuards';
@@ -84,7 +85,15 @@ export function proxy(request: NextRequest) {
     if (problems.length > 0) return configProblemsResponse(request.nextUrl.pathname, problems);
   }
 
-  return withSecurityHeaders(NextResponse.next(), production);
+  const response = withSecurityHeaders(NextResponse.next(), production);
+  // ログイン中の操作ごとに最終操作時刻を更新する（アイドル期限を延ばす。1分に1回まで）
+  if (result.principal.authMethod === 'session') {
+    const session = getAuthProvider()?.checkSession(request.headers);
+    if (session?.ok && session.refreshed) response.headers.append('Set-Cookie', sessionCookieHeader(session.refreshed, production));
+  }
+  // ログアウト後に「戻る」で保護された画面がキャッシュから表示されないようにする
+  response.headers.set('Cache-Control', 'private, no-store');
+  return response;
 }
 
 export const config = {

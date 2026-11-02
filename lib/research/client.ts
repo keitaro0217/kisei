@@ -35,7 +35,7 @@ export async function api<T>(path: string, init?: { method?: string; body?: unkn
     const err = (data as { error?: { code?: string; message?: string; label?: string; field?: string } } | null)?.error;
     if (res.status === 401) {
       // ログインの有効期限が切れた場合はログイン画面へ移動する
-      window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+      window.location.assign(`/login?reason=expired&next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
       throw new ApiError(401, 'unauthorized', 'ログインの有効期限が切れました。ログインし直してください。');
     }
     throw new ApiError(res.status, err?.code ?? 'error', err?.message ?? `エラーが発生しました（${res.status}）`, err?.label, err?.field);

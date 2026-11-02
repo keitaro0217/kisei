@@ -229,5 +229,17 @@ export const MIGRATIONS: Migration[] = [
        )`,
     ],
   },
+  {
+    id: '2026-11-02-001-auth-attempts',
+    description: 'ログイン試行の制限（サーバーレスの複数インスタンスで共有する）',
+    statements: [
+      // 接続元はハッシュで保存する（IP アドレスそのものは保存しない）
+      `CREATE TABLE IF NOT EXISTS rc_auth_attempts (
+         key text PRIMARY KEY,
+         window_start timestamptz NOT NULL,
+         failures integer NOT NULL,
+         locked_until timestamptz
+       )`,
+    ],
+  },
 ];
-

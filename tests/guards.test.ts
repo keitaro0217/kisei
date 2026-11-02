@@ -40,7 +40,9 @@ describe('ログイン画面のセッション', () => {
     expect(ok.status).toBe(200);
     expect((await ok.json()).next).toBe('/research');
     const cookie = ok.headers.get('set-cookie')!;
-    expect(cookie).toMatch(/^kisei_session=v1\.\d+\.[A-Za-z0-9_-]{43}; Path=\/; Max-Age=43200; HttpOnly; SameSite=Lax/);
+    // 有効期限のないブラウザセッション Cookie（ブラウザを閉じると消える）
+    expect(cookie).toMatch(/^kisei_session=v2\.\d+\.\d+\.[A-Za-z0-9_-]{43}; Path=\/; HttpOnly; SameSite=Lax$/);
+    expect(cookie).not.toMatch(/Max-Age|Expires/i);
     expect(cookie).not.toContain('correct-horse-battery');
     const token = cookie.split(';')[0];
     expect(authenticateHeaders(new Headers({ cookie: `other=1; ${token}` })).ok).toBe(true);
@@ -52,14 +54,70 @@ describe('ログイン画面のセッション', () => {
     expect((await login('correct-horse-battery', '198.51.100.21')).status).toBe(429);
   });
 
-  it('有効期限切れ・別のパスワードで署名したセッションは無効', async () => {
-    const { createSessionToken, verifySessionToken, safeNextPath } = await import('@/lib/server/auth/session');
+  it('アイドル期限・絶対期限・別のパスワード／SESSION_SECRET で署名したセッションは無効。操作で最終操作時刻を更新する', async () => {
+    const { createSessionToken, checkSessionToken, verifySessionToken, safeNextPath, sessionCookieHeader, clearSessionCookieHeaders } = await import('@/lib/server/auth/session');
+    const min = 60_000;
     const t = createSessionToken('pw-one-123456', 0);
     expect(verifySessionToken(t, 'pw-one-123456', 1000)).toBe(true);
-    expect(verifySessionToken(t, 'pw-one-123456', 13 * 3600 * 1000)).toBe(false);
+    // 既定のアイドル期限は 30 分
+    expect(verifySessionToken(t, 'pw-one-123456', 29 * min)).toBe(true);
+    expect(verifySessionToken(t, 'pw-one-123456', 31 * min)).toBe(false);
     expect(verifySessionToken(t, 'pw-two-123456', 1000)).toBe(false);
-    expect(safeNextPath('/research/rules')).toBe('/research/rules');
-    for (const bad of ['https://evil.example', '//evil.example', '/\\evil.example', '/login', null]) expect(safeNextPath(bad)).toBe('/research');
+    // 操作すると最終操作時刻を更新したトークンが返り、アイドル期限が延びる
+    const c = checkSessionToken(t, 'pw-one-123456', 20 * min);
+    expect(c.ok && c.refreshed).toBeTruthy();
+    const refreshed = (c as { refreshed: string }).refreshed;
+    expect(verifySessionToken(refreshed, 'pw-one-123456', 45 * min)).toBe(true);
+    // 1分未満の間隔では更新しない
+    const c2 = checkSessionToken(t, 'pw-one-123456', 30_000);
+    expect(c2.ok && c2.refreshed).toBe(null);
+    // 操作を続けても、ログインから 12 時間（既定）で無効
+    let tok = t;
+    for (let m = 20; m < 12 * 60; m += 20) tok = (checkSessionToken(tok, 'pw-one-123456', m * min) as { refreshed: string }).refreshed ?? tok;
+    expect(verifySessionToken(tok, 'pw-one-123456', (12 * 60 - 1) * min)).toBe(true);
+    expect(verifySessionToken(tok, 'pw-one-123456', (12 * 60 + 1) * min)).toBe(false);
+    // 旧形式（v1）や改ざんは拒否
+    expect(verifySessionToken(`v1.9999999999.${'A'.repeat(43)}`, 'pw-one-123456', 1000)).toBe(false);
+    // SESSION_SECRET を変えると既存のセッションは無効になる
+    process.env.SESSION_SECRET = 'rotated-secret-0123456789abcdef0123456789';
+    expect(verifySessionToken(t, 'pw-one-123456', 1000)).toBe(false);
+    delete process.env.SESSION_SECRET;
+    expect(verifySessionToken(t, 'pw-one-123456', 1000)).toBe(true);
+    // 本番は __Host- 接頭辞・Secure
+    expect(sessionCookieHeader('x', true)).toBe('__Host-kisei_session=x; Path=/; HttpOnly; SameSite=Lax; Secure');
+    expect(clearSessionCookieHeaders(true)).toHaveLength(2);
+    expect(safeNextPath('/research/rules?x=1')).toBe('/research/rules?x=1');
+    for (const bad of ['https://evil.example', '//evil.example', '/\\evil.example', '/login', '/api/research/providers', '/research\n', null]) expect(safeNextPath(bad)).toBe('/research');
+  });
+
+  it('ログイン試行の制限はデータベースで共有される（別のインスタンスでも同じ接続元はロックされる）', async () => {
+    const { attemptKey, recordLoginFailure, loginLockedFor, clearLoginFailures, LOGIN_MAX_FAILURES } = await import('@/lib/server/storage/authStore');
+    const key = attemptKey('203.0.113.200');
+    expect(key).not.toContain('203.0.113.200');
+    for (let i = 0; i < LOGIN_MAX_FAILURES - 1; i++) expect(await recordLoginFailure(key)).toBe(false);
+    expect(await loginLockedFor(key)).toBe(0);
+    expect(await recordLoginFailure(key)).toBe(true);
+    expect(await loginLockedFor(key)).toBeGreaterThan(14 * 60_000);
+    await clearLoginFailures(key);
+    expect(await loginLockedFor(key)).toBe(0);
+  });
+
+  it('proxy はログイン中の操作で Cookie を更新し、保護された応答をキャッシュさせない。ログアウトで Cookie を削除する', async () => {
+    const { proxy } = await import('@/proxy');
+    const { NextRequest } = await import('next/server');
+    const { createSessionToken } = await import('@/lib/server/auth/session');
+    const token = createSessionToken('correct-horse-battery', Date.now() - 5 * 60_000);
+    const res = proxy(new NextRequest('http://localhost/research', { headers: { cookie: `kisei_session=${token}`, 'x-forwarded-for': '192.0.2.90' } }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    expect(res.headers.get('set-cookie')).toMatch(/^kisei_session=v2\./);
+    const { POST } = await import('@/app/api/auth/logout/route');
+    const out = await POST();
+    expect(out.headers.get('set-cookie')).toMatch(/kisei_session=; Path=\/; Max-Age=0/);
+    // アイドル期限を過ぎた Cookie では画面はログイン画面へ、API は 401
+    const stale = createSessionToken('correct-horse-battery', Date.now() - 40 * 60_000);
+    expect(proxy(new NextRequest('http://localhost/research', { headers: { cookie: `kisei_session=${stale}`, accept: 'text/html', 'x-forwarded-for': '192.0.2.91' } })).status).toBe(303);
+    expect(proxy(new NextRequest('http://localhost/api/research/providers', { headers: { cookie: `kisei_session=${stale}`, 'x-forwarded-for': '192.0.2.92' } })).status).toBe(401);
   });
 });
 

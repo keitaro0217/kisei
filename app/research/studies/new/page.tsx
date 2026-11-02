@@ -1,11 +1,18 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { Alert, Button, Card, Field, inputClass, Loading, PageHeader } from '@/components/research/ui';
 import { api, ApiError } from '@/lib/research/client';
 import { objectiveLabels, personaLabels } from '@/lib/research/study-labels';
 import type { AgentObjective, Persona, PromptSet, RulePair, RuleVersion, Study, StudyCondition } from '@/lib/research/study-types';
+
+type ResearchModels = {
+  providers: { providerId: string; providerName: string; providerType: string; defaultModel: string | null; models: string[] }[];
+  defaultModel: { providerId: string; model: string } | null;
+  tradingAgent: { providerId: string | null; model: string | null };
+};
 
 // 研究デザインの作成。条件（条文・提示方法・目標・ペルソナ）を並べ、同じ市場とシードで比較する。
 
@@ -47,9 +54,18 @@ function Designer() {
   const [initialPrice, setInitialPrice] = useState('1000');
   const [volatility, setVolatility] = useState('0.02');
   const [agent, setAgent] = useState<'mock' | 'model'>('mock');
+  /** 「接続先ID::モデル」（空なら取引エージェントの割り当て・デフォルトのモデル） */
+  const [agentModel, setAgentModel] = useState('');
+  const [available, setAvailable] = useState<ResearchModels | null>(null);
   const [promptSetId, setPromptSetId] = useState('');
   const [pair, setPair] = useState<RulePair | null>(null);
   const [withControl, setWithControl] = useState(false);
+
+  useEffect(() => {
+    api<ResearchModels>('/research-models')
+      .then(setAvailable)
+      .catch(() => setAvailable({ providers: [], defaultModel: null, tradingAgent: { providerId: null, model: null } }));
+  }, []);
 
   useEffect(() => {
     Promise.all([api<{ rules: RuleVersion[] }>('/rules'), api<{ pairs: RulePair[] }>('/rule-pairs'), api<{ prompts: PromptSet[] }>('/prompts')])
@@ -73,6 +89,12 @@ function Designer() {
   }, [pairId]);
 
   if (!rules) return <Loading />;
+
+  const nameOf = (id: string | null) => available?.providers.find((p) => p.providerId === id)?.providerName ?? null;
+  const fallback = available?.tradingAgent.providerId && available.tradingAgent.model ? available.tradingAgent : available?.defaultModel ?? null;
+  const fallbackUsable = Boolean(fallback && nameOf(fallback.providerId));
+  const fallbackLabel = fallbackUsable ? `用途の割り当て・デフォルト（${nameOf(fallback!.providerId)} / ${fallback!.model}）` : '用途の割り当て・デフォルト（未設定のため、下から選んでください）';
+  const modelUnavailable = available !== null && available.providers.length === 0;
 
   /** 2×2 計画: 文言（A/B）× 規制趣旨の提示（なし/あり）。必要に応じて規則なしの統制群 C4 を加える */
   const apply2x2 = () => {
@@ -120,7 +142,7 @@ function Designer() {
           replicates: Number(replicates),
           baseSeed: Number(baseSeed),
           market: { mode: 'exogenous_simple', steps: Number(steps), initialCash: Number(initialCash), initialPrice: Number(initialPrice), volatility: Number(volatility) },
-          agent: { kind: agent },
+          agent: agent === 'model' && agentModel ? { kind: 'model', providerId: agentModel.split('::')[0], model: agentModel.slice(agentModel.indexOf('::') + 2) } : { kind: agent },
           promptSetId: promptSetId || null,
         },
       });
@@ -332,14 +354,36 @@ function Designer() {
                 <span className="text-xs text-ink-200">シードから決定論的に行動を生成します。条文を読まないため、結果は「モックデータ」と表示され、AIの研究結果としては扱われません。研究フローの確認用です。</span>
               </span>
             </label>
-            <label className="flex items-start gap-2">
-              <input type="radio" className="mt-1" checked={agent === 'model'} onChange={() => setAgent('model')} />
+            <label className={`flex items-start gap-2 ${modelUnavailable ? 'opacity-60' : ''}`}>
+              <input type="radio" className="mt-1" checked={agent === 'model'} disabled={modelUnavailable} onChange={() => setAgent('model')} />
               <span>
                 <span className="font-semibold text-white">AIモデル</span>
                 <br />
-                <span className="text-xs text-ink-200">設定 → モデル割り当ての「取引エージェント」を使います。開始時にモデル設定を凍結します。呼び出し回数の目安: {totalCalls.toLocaleString()} 回（費用が発生します）。</span>
+                <span className="text-xs text-ink-200">API連携で登録したモデルを使います。開始時にモデル設定（接続先・モデル ID・推論設定）を凍結して記録します（APIキーは記録しません）。呼び出し回数の目安: {totalCalls.toLocaleString()} 回（費用が発生します）。</span>
+                {modelUnavailable && (
+                  <span className="mt-1 block text-xs text-amber-200">
+                    使えるモデルがありません。<Link href="/research/settings/api" className="underline underline-offset-2">設定 → API連携</Link>で APIキーを登録し、接続テストに成功すると選べます。
+                  </span>
+                )}
               </span>
             </label>
+            {agent === 'model' && available && (
+              <Field label="使うモデル" hint="研究での利用が有効で、接続テストに成功したモデルから選べます。">
+                <select className={inputClass} value={agentModel} onChange={(e) => setAgentModel(e.target.value)}>
+                  <option value="">{fallbackLabel}</option>
+                  {available.providers.map((p) => (
+                    <optgroup key={p.providerId} label={p.providerName}>
+                      {p.models.map((m) => (
+                        <option key={m} value={`${p.providerId}::${m}`}>
+                          {m}
+                          {m === p.defaultModel ? '（接続確認済み）' : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </Field>
+            )}
             <Field label="プロンプト" hint="未選択の場合は標準プロンプトの最初の版を使います。">
               <select className={inputClass} value={promptSetId} onChange={(e) => setPromptSetId(e.target.value)}>
                 <option value="">標準</option>

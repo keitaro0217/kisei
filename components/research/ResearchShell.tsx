@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import IdleLock from './IdleLock';
 import { usePathname } from 'next/navigation';
 import { createContext, useContext, type ReactNode } from 'react';
 import type { BasicSettings } from '@/lib/research/types';
@@ -66,7 +67,7 @@ export const settingsNav = [
 function LogoutButton({ className }: { className: string }) {
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => undefined);
-    window.location.assign('/login');
+    window.location.assign('/login?reason=logout');
   };
   return (
     <button type="button" onClick={logout} className={className}>
@@ -83,12 +84,13 @@ function useActive() {
   };
 }
 
-export default function ResearchShell({ basic, principal, children }: { basic: BasicSettings; principal: string; children: ReactNode }) {
+export default function ResearchShell({ basic, principal, idleMinutes, children }: { basic: BasicSettings; principal: string; idleMinutes?: number | null; children: ReactNode }) {
   const { pathname, isActive } = useActive();
   const current = settingsNav.find((s) => pathname === s.href) ?? nav.find((n) => isActive(n.href, n.exact));
 
   return (
     <SettingsContext.Provider value={basic}>
+      {idleMinutes ? <IdleLock idleMinutes={idleMinutes} /> : null}
       <div className="research-root md:flex">
         {/* デスクトップ: 黒の固定サイドバー */}
         <aside className="rc-sidebar sticky top-0 hidden h-screen w-64 flex-shrink-0 flex-col text-ink-100 md:flex">
