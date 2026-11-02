@@ -22,7 +22,7 @@ export default function TracePage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Agent Trace"
-        title="AI エージェントの行動トレース"
+        title="Agent Trace"
         description="各ステップで、エージェントが何を観測し、どの規則・文書を参照し、何を判断・実行し、どんな結果になったかを時系列で記録します。"
         actions={
           <>
@@ -38,7 +38,7 @@ export default function TracePage() {
           <div className="rounded-xl border-2 border-blue-600 bg-blue-50/40 p-4">
             <div className="flex items-center gap-2">
               <Badge tone="blue">使用中</Badge>
-              <p className="font-semibold text-[#0b1f44]">A. Deterministic Demo Agent</p>
+              <p className="font-semibold text-[#1e2a4a]">A. Deterministic Demo Agent</p>
             </div>
             <p className="mt-2 text-xs leading-relaxed text-slate-600">外部 API を使わず、設定済みの方策とシードに従って行動します。説明文はアプリがテンプレートから生成したもので、LLM の出力ではありません。</p>
           </div>
@@ -106,7 +106,7 @@ export default function TracePage() {
                   <p className="text-xs font-semibold text-slate-600">Agent Explanation</p>
                   <ProvenanceBadge kind="app_text" />
                 </div>
-                <p className="mt-2 text-sm text-[#0b1f44]">{cur.explanation}</p>
+                <p className="mt-2 text-sm text-[#1e2a4a]">{cur.explanation}</p>
                 <p className="mt-2 text-[11px] text-slate-500">LLM の非公開の思考過程は表示しません（このデモのエージェントは LLM ではありません）。</p>
               </div>
             </Card>

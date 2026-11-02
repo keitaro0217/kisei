@@ -25,7 +25,7 @@ export default function ExperimentPage() {
   };
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Experiment Builder" title="2×2 要因実験" description="文言（A / B）と規制趣旨の説明（なし C1 / あり C2）を組み合わせた4条件と、規則なしの統制条件を、同じシードの列で比べます。" />
+      <PageHeader eyebrow="Experiment Builder" title="Experiment Builder" description="文言（A / B）と規制趣旨の説明（なし C1 / あり C2）を組み合わせた4条件と、規則なしの統制条件を、同じシードの列で比べます。" />
       <Callout tone="note">研究資料に記載の 400 エピソードは計画上の想定値で、完了済みの研究結果ではありません。このデモでは、ブラウザで実行できる規模（既定 30 エピソード × 5 条件）で、決定論的なシミュレーションを実行します。</Callout>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -35,7 +35,7 @@ export default function ExperimentPage() {
               <label key={c.id} className={`flex cursor-pointer items-start gap-2 rounded-xl border p-3 text-sm ${cfg.conditions.includes(c.id) ? 'border-blue-300 bg-blue-50/50' : 'border-slate-200'}`}>
                 <input type="checkbox" checked={cfg.conditions.includes(c.id)} onChange={() => toggleCond(c.id)} className="mt-0.5 accent-blue-700" disabled={running} />
                 <span>
-                  <span className="font-semibold text-[#0b1f44]">{c.label}</span>
+                  <span className="font-semibold text-[#1e2a4a]">{c.label}</span>
                   <span className="block text-xs text-slate-500">{c.description}</span>
                 </span>
               </label>
@@ -131,7 +131,7 @@ export default function ExperimentPage() {
               <ProvenanceBadge kind="simulation" short />
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuenow={exp.done} aria-valuemax={exp.total}>
-              <div className="h-full bg-[#1d4ed8] transition-all" style={{ width: `${(exp.done / exp.total) * 100}%` }} />
+              <div className="h-full bg-[#4f46e5] transition-all" style={{ width: `${(exp.done / exp.total) * 100}%` }} />
             </div>
             <p className="text-xs text-slate-500">
               開始時の条件（スナップショット）: 条件 {exp.snapshot.conditions.join(', ')}・{exp.snapshot.episodes} エピソード・{exp.snapshot.steps} ステップ・規則 v{exp.snapshot.rules.version}・参照文書{' '}
@@ -145,7 +145,7 @@ export default function ExperimentPage() {
               <Button size="sm" disabled={exp.done === 0} onClick={() => download(`kisei-demo-experiment-v${exp.version}.json`, JSON.stringify(exp, null, 2), 'application/json')}>
                 Export JSON
               </Button>
-              <Link href="/demo/research/analysis" className="inline-flex items-center rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-[#0b1f44] hover:bg-slate-50">
+              <Link href="/demo/research/analysis" className="inline-flex items-center rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-[#1e2a4a] hover:bg-slate-50">
                 Compare Conditions →
               </Link>
             </div>

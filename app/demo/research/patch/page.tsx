@@ -52,7 +52,7 @@ export default function PatchPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Auto-Patch & Verify"
-        title="修正案の生成と検証"
+        title="Auto-Patch & Verify"
         description="修正案は、このデモの合成規則とサンドボックスにだけ適用します。修正しただけでは解決とは扱わず、同じ条件・同じシードで再実験し、逸脱候補の変化と、正常な取引への副作用を両方測ります。"
         actions={
           <Button variant="primary" onClick={() => setGenerated(true)}>
@@ -147,7 +147,7 @@ export default function PatchPage() {
                           const fd = (x: number) => (isRate ? `${(x * 100).toFixed(1)} pt` : `${num(x)}円`);
                           return (
                             <tr key={r.metric}>
-                              <td className="py-1.5 pr-2 font-medium text-[#0b1f44]">{r.label}</td>
+                              <td className="py-1.5 pr-2 font-medium text-[#1e2a4a]">{r.label}</td>
                               <td className="pr-2 tabular-nums">{f(r.before.mean)}</td>
                               <td className="pr-2 tabular-nums">{f(r.after.mean)}</td>
                               <td className="pr-2 tabular-nums">

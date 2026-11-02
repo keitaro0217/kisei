@@ -47,7 +47,7 @@ export default function ReportPage() {
     <div className="space-y-6 print:space-y-3">
       <PageHeader
         eyebrow="Research Report"
-        title="研究レポート（デモ）"
+        title="Research Report"
         description="このブラウザで実行したデモの実験を、研究レポートの形でまとめます。"
         actions={
           <div className="flex flex-wrap gap-2 print:hidden">

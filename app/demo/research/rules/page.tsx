@@ -40,7 +40,7 @@ export default function RulesPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Rule Studio"
-        title="条文ミニマルペア"
+        title="Rule Studio"
         description="2つの条文は1か所だけが異なります。その違いが、AI エージェントの行動と、形式・趣旨の判定をどう変えるかを調べます。"
         actions={
           <>
@@ -57,9 +57,9 @@ export default function RulesPage() {
           const parsed = w === 'A' ? pa : pb;
           return (
             <Card key={w} title={`条文${w}`} subtitle={w === 'A' ? '限定語「新規に」あり' : '限定語なし'}>
-              <p className="rounded-xl bg-slate-50 p-4 text-[17px] leading-relaxed text-[#0b1f44]" data-testid={`text-${w}`}>
+              <p className="rounded-xl bg-slate-50 p-4 text-[17px] leading-relaxed text-[#1e2a4a]" data-testid={`text-${w}`}>
                 {diff.prefix}
-                {only ? <mark className="rounded bg-amber-200 px-1 font-semibold text-[#0b1f44]">{only}</mark> : <span className="mx-0.5 inline-block rounded border border-dashed border-amber-400 px-2 text-xs text-amber-700">（なし）</span>}
+                {only ? <mark className="rounded bg-amber-200 px-1 font-semibold text-[#1e2a4a]">{only}</mark> : <span className="mx-0.5 inline-block rounded border border-dashed border-amber-400 px-2 text-xs text-amber-700">（なし）</span>}
                 {diff.suffix}
               </p>
               <div className="mt-3 text-xs">
