@@ -33,6 +33,7 @@ import {
   renewSessionLeases,
   sessionCounts,
   startStudyWithSessions,
+  studySpentUsd,
   updateStudy,
 } from '../../storage/studyStore';
 import { contentHash } from '../../util/canonical';
@@ -161,6 +162,8 @@ export function parseDesign(input: Record<string, unknown>): StudyDesign {
     market,
     agent,
     promptSetId: typeof input.promptSetId === 'string' && input.promptSetId ? input.promptSetId : null,
+    // 研究ごとの費用の上限（米ドル）。達したら研究を一時停止する。未指定なら上限なし（プロバイダーごとの月間予算は別に適用される）
+    maxCostUsd: input.maxCostUsd === null || input.maxCostUsd === undefined || input.maxCostUsd === '' ? null : num(input.maxCostUsd, 'maxCostUsd', 0.01, 100_000),
   };
 }
 
@@ -211,6 +214,17 @@ export function frozenHashOf(f: FrozenStudyConfig): string {
 /** 0〜2^48 の整数（実行順のばらつき用。条件IDと反復から決定的に求める） */
 const orderKeyOf = (studyId: string, conditionId: string, replicate: number) => parseInt(contentHash([studyId, conditionId, replicate]).slice(0, 12), 16);
 
+/** 研究で使うモデル: 研究で指定したモデル、なければ「取引エージェント」の割り当て（さらになければデフォルトのモデル） */
+export function resolveAgentRole(config: Awaited<ReturnType<typeof getConfig>>, design: StudyDesign) {
+  return design.agent.kind === 'model' && design.agent.providerId && design.agent.model
+    ? providerSnapshot(config, design.agent.providerId, design.agent.model, {
+        label: '取引エージェント',
+        maxOutputTokens: config.roles.trading_agent.maxOutputTokens,
+        reasoning: config.roles.trading_agent.providerId === design.agent.providerId ? config.roles.trading_agent.reasoning : {},
+      })
+    : roleSnapshot(config, 'trading_agent');
+}
+
 export async function startStudy(id: string, actor: Principal): Promise<Study> {
   const study = await getStudyRow(id);
   if (!study) throw new ValidationError('研究が見つかりません。');
@@ -227,14 +241,7 @@ export async function startStudy(id: string, actor: Principal): Promise<Study> {
   if (design.agent.kind === 'model') {
     try {
       // 研究で指定したモデル、なければ「取引エージェント」の割り当て（さらになければデフォルトのモデル）
-      agentRole =
-        design.agent.providerId && design.agent.model
-          ? providerSnapshot(config, design.agent.providerId, design.agent.model, {
-              label: '取引エージェント',
-              maxOutputTokens: config.roles.trading_agent.maxOutputTokens,
-              reasoning: config.roles.trading_agent.providerId === design.agent.providerId ? config.roles.trading_agent.reasoning : {},
-            })
-          : roleSnapshot(config, 'trading_agent');
+      agentRole = resolveAgentRole(config, design);
       await assertPricedWhenBudgeted(agentRole.providerId, agentRole.model);
     } catch (e) {
       const err = toLlmError(e);
@@ -541,6 +548,12 @@ export async function runStudySlice(id: string, deadline: number): Promise<'done
   const renewal = setInterval(() => void renewSessionLeases(id, owner, LEASE_MS).catch(() => undefined), RENEW_MS);
   try {
     while (Date.now() < deadline && (await shouldContinue())) {
+      // 研究ごとの費用の上限（セッションの開始前に確認する。実行中のセッションの分だけ上限を少し超えることがある）
+      const cap = study.design.maxCostUsd ?? null;
+      if (cap !== null && (await studySpentUsd(id)) >= cap) {
+        fatal = `費用の上限（$${cap}）に達しました。上限を確認して再開してください`;
+        break;
+      }
       const claimed = await claimSessions(id, owner, concurrency, LEASE_MS);
       if (claimed.length === 0) break;
       await Promise.all(

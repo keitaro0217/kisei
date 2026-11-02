@@ -173,6 +173,8 @@ export type StudyDesign = {
   market: StudyMarket;
   agent: AgentSpec;
   promptSetId: string | null;
+  /** 研究ごとの費用の上限（米ドル）。以前の研究にはない */
+  maxCostUsd?: number | null;
 };
 
 export type StudyStatus = 'draft' | 'running' | 'paused' | 'completed' | 'stopped';
@@ -204,6 +206,8 @@ export type Study = {
   startedAt: string | null;
   finishedAt: string | null;
   updatedAt: string;
+  /** 複製元の研究（複製した場合） */
+  duplicatedFrom?: string | null;
 };
 
 export type SessionStatus = 'pending' | 'running' | 'completed' | 'failed';

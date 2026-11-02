@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import DecisionLog, { type DecisionFocus } from '@/components/research/DecisionLog';
 import StudyChart from '@/components/research/StudyChart';
+import StudyCostCard from '@/components/research/StudyCostCard';
 import { Alert, Badge, Button, Card, Loading, PageHeader, Stat, Table, td } from '@/components/research/ui';
 import { useBasicSettings } from '@/components/research/ResearchShell';
 import { api, formatDate } from '@/lib/research/client';
@@ -14,7 +15,8 @@ import type { StudyStats } from '@/lib/server/research/study/stats';
 import type { LogisticResult } from '@/lib/server/research/study/regression';
 import { ForestPlot, StepSeries } from '@/components/research/ComparisonCharts';
 
-type Detail = { study: Study; sessions: StudySession[]; stats: StudyStats | null; regression: LogisticResult | null };
+type Liveness = { state: 'active' | 'waiting' | 'stalled' | 'idle'; lastActivityAt: string | null; remaining: number };
+type Detail = { study: Study; sessions: StudySession[]; liveness?: Liveness; stats: StudyStats | null; regression: LogisticResult | null };
 
 const pct = (p: number | null) => (p === null ? '—' : `${(p * 100).toFixed(1)}%`);
 const ci = (c: [number, number] | null) => (c ? `[${(c[0] * 100).toFixed(1)}, ${(c[1] * 100).toFixed(1)}]` : '');
@@ -75,7 +77,12 @@ export default function StudyPage() {
     setBusy(action);
     setError(null);
     try {
-      await api(`/studies/${id}/actions`, { method: 'POST', body: { action } });
+      const r = await api<{ study: Study }>(`/studies/${id}/actions`, { method: 'POST', body: { action } });
+      // 複製したら新しい下書きを開く
+      if (action === 'duplicate') {
+        window.location.assign(`/research/studies/${r.study.id}`);
+        return;
+      }
       await load();
     } catch (e) {
       setError((e as Error).message);
@@ -103,6 +110,9 @@ export default function StudyPage() {
                 </Link>
               </>
             )}
+            <Button busy={busy === 'duplicate'} onClick={() => act('duplicate')}>
+              複製
+            </Button>
             {study.status === 'draft' && (
               <Button variant="primary" busy={busy === 'start'} onClick={() => act('start')}>
                 設定を凍結して開始
@@ -140,6 +150,13 @@ export default function StudyPage() {
           </Alert>
         </div>
       )}
+      {study.status === 'running' && data.liveness?.state === 'stalled' && (
+        <div className="mb-4">
+          <Alert kind="warning" title="処理が止まっています">
+            残り {data.liveness.remaining} 件のセッションがありますが、{data.liveness.lastActivityAt ? `${formatDate(data.liveness.lastActivityAt, basic)} 以降` : 'しばらく'}処理が進んでいません。この画面を開いている間は自動で再開を試みます。続く場合は「一時停止」→「再開」を試し、サーバーの環境変数 CRON_SECRET の設定を確認してください。
+          </Alert>
+        </div>
+      )}
       {study.statusReason && (
         <div className="mb-4">
           <Alert kind={study.status === 'completed' ? 'info' : 'warning'} title="状態の詳細">
@@ -160,6 +177,8 @@ export default function StudyPage() {
             <div className="h-full bg-white transition-all" style={{ width: `${(done / sessions.length) * 100}%` }} />
           </div>
         )}
+
+        {!study.isMock && <StudyCostCard studyId={id} editable={study.status !== 'completed' && study.status !== 'stopped'} refreshKey={`${study.status}:${done}`} />}
 
         <Card title="研究デザイン" description={study.frozen ? '開始時に凍結した内容です。変更できません。' : '下書きです。開始すると凍結されます。'}>
           <dl className="grid gap-3 text-sm md:grid-cols-2">

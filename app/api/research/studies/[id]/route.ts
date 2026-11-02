@@ -2,6 +2,7 @@ import { apiError, json, readJson, withAuth } from '@/lib/server/api';
 import { scheduleWork } from '@/lib/server/research/scheduler';
 import { conditionLogistic } from '@/lib/server/research/study/regression';
 import { computeStudyStats } from '@/lib/server/research/study/stats';
+import { studyLiveness } from '@/lib/server/research/study/operations';
 import { getStudyDetail, listDecisions, updateStudyDesign } from '@/lib/server/research/study/studies';
 
 export const maxDuration = 300;
@@ -13,10 +14,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     if (!detail) return apiError(404, 'not_found', '研究が見つかりません。');
     // 画面を開いている間は処理が進むようにする（担当中のワーカーがいれば重複しない）
     if (detail.study.status === 'running') scheduleWork(request);
-    if (!detail.study.frozen) return json({ ...detail, stats: null, regression: null });
+    const liveness = await studyLiveness(id);
+    if (!detail.study.frozen) return json({ ...detail, liveness, stats: null, regression: null });
     const decisions = await listDecisions(id);
     const completed = new Set(detail.sessions.filter((s) => s.status === 'completed').map((s) => `${s.conditionId}/${s.replicate}`));
-    return json({ ...detail, stats: computeStudyStats(detail.study, detail.sessions, decisions), regression: conditionLogistic(detail.study, decisions, completed) });
+    return json({ ...detail, liveness, stats: computeStudyStats(detail.study, detail.sessions, decisions), regression: conditionLogistic(detail.study, decisions, completed) });
   });
 }
 
