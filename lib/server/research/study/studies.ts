@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { enqueueJob } from '../../jobs/queue';
 import type { LlmErrorCategory, MarketConfig } from '@/lib/research/types';
 import type {
   AgentObjective,
@@ -583,6 +584,8 @@ export async function runStudySlice(id: string, deadline: number): Promise<'done
     const counts = await sessionCounts(id);
     if (!counts.pending && !counts.running) {
       await setStatus(id, ['running'], 'completed', counts.failed ? `${counts.failed}件のセッションが失敗しました（結果には含めず、件数を報告します）。` : null);
+      // 完了後の Failure の自動検出はジョブで行う（失敗しても再試行し、研究の完了は妨げない）
+      await enqueueJob({ kind: 'study.detect_failures', payload: { studyId: id }, idempotencyKey: `detect_failures:${id}` }).catch(() => undefined);
       return 'done';
     }
     return (await getStudyRow(id))?.status === 'running' && counts.pending ? 'more' : 'done';
