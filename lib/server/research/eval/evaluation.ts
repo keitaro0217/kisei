@@ -35,7 +35,12 @@ import {
 import { getConfig } from '../../storage/store';
 import { getDecisionsByKeys, getStudy, listDecisions, listSessions } from '../../storage/studyStore';
 import { ValidationError } from '../providers';
-import { roleSnapshot } from '../snapshot';
+import { providerSnapshot, roleSnapshot } from '../snapshot';
+import { EVAL_CATEGORIES, type EvalCategory } from '@/lib/research/evaluation-model';
+
+/** 6分類のカテゴリから、従来の趣旨の評価（3値）を決める */
+export const intentOfCategory = (c: EvalCategory): IntentLabel =>
+  c === 'intent_deviation' || c === 'explicit_violation' ? 'deviation_suspected' : c === 'compliant' ? 'aligned' : 'uncertain';
 import { mulberry32 } from '../sim/market';
 import { agreementStats } from '../study/stats';
 import { BOUNDARY_THRESHOLD } from '../study/studies';
@@ -106,9 +111,15 @@ export async function createEvalRun(studyId: string, input: Record<string, unkno
   const strategy = input.sampleStrategy === 'random' ? 'random' : 'all_flagged_then_random';
   const seed = Number.isInteger(Number(input.sampleSeed)) ? Number(input.sampleSeed) : 1;
   let judgeRole = null;
+  const evidenceOrder = input.evidenceOrder === 'reversed' ? 'reversed' : 'default';
+  // 評価に使うモデル: 指定があればそれ（行動を生成したモデルと別のモデルを選んで独立に評価できる）、なければ「LLM Judge」の割り当て
+  const pid = typeof input.providerId === 'string' && input.providerId ? input.providerId : null;
+  const pm = typeof input.model === 'string' && input.model.trim() ? input.model.trim() : null;
+  if ((pid === null) !== (pm === null)) throw new ValidationError('評価に使うモデルを指定する場合は、接続先とモデルの両方を選んでください。', 'model');
   if (kind === 'model') {
     try {
-      judgeRole = roleSnapshot(await getConfig(), 'llm_judge');
+      const config = await getConfig();
+      judgeRole = pid && pm ? providerSnapshot(config, pid, pm, { label: 'LLM Judge', maxOutputTokens: config.roles.llm_judge.maxOutputTokens }) : roleSnapshot(config, 'llm_judge');
       await assertPricedWhenBudgeted(judgeRole.providerId, judgeRole.model);
     } catch (e) {
       throw toLlmError(e);
@@ -133,7 +144,7 @@ export async function createEvalRun(studyId: string, input: Record<string, unkno
   const run: EvalRun = {
     id: randomUUID(),
     studyId,
-    name: String(input.name ?? '').trim().slice(0, 80) || (kind === 'mock' ? 'モック Judge' : `LLM Judge（${judgeRole!.model}）`),
+    name: String(input.name ?? '').trim().slice(0, 80) || (kind === 'mock' ? 'モック Judge' : `LLM Judge（${judgeRole!.model}）`) + (evidenceOrder === 'reversed' ? '・証拠を逆順' : ''),
     kind,
     judgeRole,
     promptVersion: JUDGE_PROMPT_VERSION,
@@ -141,6 +152,7 @@ export async function createEvalRun(studyId: string, input: Record<string, unkno
     sample,
     sampleStrategy: strategy,
     sampleSeed: seed,
+    evidenceOrder,
     status: 'running',
     statusReason: null,
     completed: 0,
@@ -162,7 +174,9 @@ function rulesFor(study: Study, conditionId: string): RuleVersion[] {
 /** 1件の判断を Judge で評価する */
 export async function judgeDecision(study: Study, run: EvalRun, d: DecisionRecord): Promise<JudgeVerdict> {
   const cond = study.frozen!.design.conditions.find((c) => c.id === d.conditionId);
-  const evidence = buildEvidence(d, rulesFor(study, d.conditionId), cond);
+  const built = buildEvidence(d, rulesFor(study, d.conditionId), cond);
+  // 証拠の順序だけを変えて評価順序の影響を調べる（証拠 ID は変えない）
+  const evidence = run.evidenceOrder === 'reversed' ? [...built].reverse() : built;
   if (run.kind === 'mock') {
     return { ...parseJudgeVerdict(mockJudgeResponse(d, evidence, BOUNDARY_THRESHOLD), evidence), usage: null, at: new Date().toISOString() };
   }
@@ -281,12 +295,16 @@ export async function saveAnnotation(studyId: string, input: Record<string, unkn
   if (!d) throw new ValidationError('評価対象の判断が見つかりません。');
   const annotator = typeof input.annotator === 'string' ? input.annotator.trim() : '';
   if (!annotator || annotator.length > 40) throw new ValidationError('評価者の名前を1〜40文字で入力してください。', 'annotator');
+  // 6分類のカテゴリで評価した場合は、趣旨の評価（3値）をカテゴリから決める
+  const category = typeof input.category === 'string' && input.category ? input.category : null;
+  if (category !== null && !EVAL_CATEGORIES.includes(category as EvalCategory)) throw new ValidationError('判定カテゴリが正しくありません。', 'category');
+  if (category !== null && input.intent === undefined) input.intent = intentOfCategory(category as EvalCategory);
   if (!INTENTS.includes(input.intent as IntentLabel)) throw new ValidationError('趣旨の評価を選んでください。', 'intent');
   const reason = typeof input.reason === 'string' ? input.reason.trim().slice(0, 2000) : '';
   const formalCorrect = input.formalCorrect === true ? true : input.formalCorrect === false ? false : null;
   const correctsRunId = typeof input.correctsRunId === 'string' && input.correctsRunId ? input.correctsRunId : null;
   if (correctsRunId && !reason) throw new ValidationError('Judge の評価を修正する場合は、修正理由を入力してください。', 'reason');
-  const saved = await upsertAnnotation({ studyId, ...key, annotator, intent: input.intent as IntentLabel, formalCorrect, reason, correctsRunId });
+  const saved = await upsertAnnotation({ studyId, ...key, annotator, intent: input.intent as IntentLabel, formalCorrect, reason, correctsRunId, category: category as EvalCategory | null });
   await audit(actor, 'annotation.save', `${studyId}:${decisionKey(key)}`, 'success', `annotator=${annotator}`);
   return saved;
 }

@@ -62,11 +62,18 @@ export const intentLabels: Record<IntentLabel, string> = {
   uncertain: '判断できない',
 };
 
-export const categoryOfFailureLabels: Record<'formal_violation' | 'intent_deviation' | 'boundary_exploitation', string> = {
+export const categoryOfFailureLabels: Record<import('./failure-types').FailureCategory, string> = {
   formal_violation: '形式違反',
   intent_deviation: '趣旨逸脱の疑い',
   boundary_exploitation: '閾値付近の行動',
+  anomalous_behavior: '異常な行動（外れ値）',
+  evaluation_disagreement: '評価の不一致',
+  unevaluable: '評価不能',
+  inappropriate_tool_use: '不適切なツールの使用',
+  unauthorized_information_use: '権限外の情報の利用',
 };
+
+export const confidenceLabels: Record<'low' | 'medium' | 'high', string> = { low: '確信度 低', medium: '確信度 中', high: '確信度 高' };
 
 export const severityLabels: Record<'low' | 'medium' | 'high', { label: string; className: string }> = {
   high: { label: '高', className: 'bg-rose-500/10 text-rose-200 ring-rose-400/30' },

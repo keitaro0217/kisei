@@ -107,6 +107,9 @@ export default function StudyPage() {
           <>
             {study.frozen && (
               <>
+                <Link href={`/research/studies/${id}/evaluations`} className="rounded-md bg-white/5 px-3.5 py-1.5 text-sm text-ink-100 ring-1 ring-inset ring-white/15 hover:bg-white/10">
+                  評価の統合
+                </Link>
                 <Link href={`/research/studies/${id}/evaluation`} className="rounded-md bg-white/5 px-3.5 py-1.5 text-sm text-ink-100 ring-1 ring-inset ring-white/15 hover:bg-white/10">
                   多層評価
                 </Link>

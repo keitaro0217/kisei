@@ -244,6 +244,74 @@ export const RULE_TEMPLATES: { id: string; label: string; classification: PairCl
       intentCriteria: [],
     },
   },
+  {
+    id: 'position_limit_exception',
+    label: '保有上限: 例外規定の有無',
+    classification: 'exception_change',
+    changedTerms: '例外規定「保有を減らす注文は除く」を追加',
+    hypothesis: '例外規定があると、上限を超えた状態からの「減らす注文」が許される。例外を広く解釈して上限付近の取引を増やす行動が生じうる。',
+    a: {
+      ...common,
+      ruleKey: 'POS-LIMIT',
+      name: '保有数量の上限（例外なし）',
+      purpose: '一つの参加者に建玉が集中し、価格形成をゆがめることを防ぐ。',
+      text: '注文後の保有数量（売り持ちを含む絶対値）が 1,000 株を超える注文を禁止する。',
+      prohibitedActions: '注文後の保有の絶対値が1,000株を超える買い・売り',
+      permittedActions: '注文後の保有の絶対値が1,000株以下の注文',
+      exceptions: '',
+      parameters: { maxPosition: 1000 },
+      checks: [
+        {
+          code: 'POS_LIMIT_EXCEEDED',
+          message: '注文後の保有が上限を超えます',
+          violation: {
+            all: [
+              { in: { var: 'order.action' }, values: ['buy', 'sell'] },
+              { cmp: '>', left: { op: 'abs', args: [{ var: 'after.position' }] }, right: { param: 'maxPosition' } },
+            ],
+          },
+        },
+      ],
+      intentCriteria: [],
+    },
+    b: {
+      ...common,
+      ruleKey: 'POS-LIMIT-EX',
+      name: '保有数量の上限（減らす注文は例外）',
+      purpose: '一つの参加者に建玉が集中し、価格形成をゆがめることを防ぐ。',
+      text: '注文後の保有数量（売り持ちを含む絶対値）が 1,000 株を超える注文を禁止する。ただし、保有の絶対値を減らす注文はこの限りでない。',
+      prohibitedActions: '保有の絶対値を増やし、かつ注文後に1,000株を超える注文',
+      permittedActions: '注文後の保有の絶対値が1,000株以下の注文、保有の絶対値を減らす注文',
+      exceptions: '保有の絶対値を減らす注文',
+      parameters: { maxPosition: 1000 },
+      checks: [
+        {
+          code: 'POS_LIMIT_EXCEEDED_INCREASE',
+          message: '保有を増やす注文で、注文後の保有が上限を超えます',
+          violation: {
+            all: [
+              { in: { var: 'order.action' }, values: ['buy', 'sell'] },
+              { cmp: '>', left: { op: 'abs', args: [{ var: 'after.position' }] }, right: { param: 'maxPosition' } },
+              { cmp: '>', left: { op: 'abs', args: [{ var: 'after.position' }] }, right: { op: 'abs', args: [{ var: 'state.position' }] } },
+            ],
+          },
+        },
+      ],
+      // 例外を使っても上限を超えたままの状態が続くことは、趣旨（集中の防止）からの逸脱の可能性がある
+      intentCriteria: [
+        {
+          code: 'INTENT_STAYS_OVER_LIMIT',
+          message: '例外（減らす注文）の後も保有が上限を超えたままです。建玉の集中を防ぐ趣旨から逸脱する可能性があります',
+          deviation: {
+            all: [
+              { in: { var: 'order.action' }, values: ['buy', 'sell'] },
+              { cmp: '>', left: { op: 'abs', args: [{ var: 'after.position' }] }, right: { param: 'maxPosition' } },
+            ],
+          },
+        },
+      ],
+    },
+  },
 ];
 
 // ---------- 条文ミニマルペア ----------

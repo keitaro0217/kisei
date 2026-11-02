@@ -382,6 +382,11 @@ export async function runStudySession(
     providerType: frozen.agentRole?.providerType ?? null,
     rules: ruleRefs,
     promptSet: `${frozen.promptSet.name}@v${frozen.promptSet.version}`,
+    promptVersion: `${frozen.promptSet.name}@v${frozen.promptSet.version}`,
+    agentId: `${study.id}:${condition.id}:agent`,
+    // 情報へのアクセス権限（この環境では、条文・趣旨の提示の有無が参照できる文書を決める）とツール（この環境にはない）
+    accessPermissions: [condition.presentRules ? 'rules:read' : 'rules:none', condition.includePurpose ? 'purpose:read' : 'purpose:none'],
+    tools: [],
     frozenHash: study.frozenHash ?? null,
   });
 
@@ -462,7 +467,15 @@ export async function runStudySession(
         text = res.text;
         usage = { inputTokens: res.usage.inputTokens, outputTokens: res.usage.outputTokens, costUsd: res.record.costUsd };
         tracer.end(llm, {
-          attributes: { inputTokens: res.usage.inputTokens, outputTokens: res.usage.outputTokens, costUsd: res.record.costUsd, latencyMs: res.latencyMs, attempts: res.attempts },
+          attributes: {
+            inputTokens: res.usage.inputTokens,
+            outputTokens: res.usage.outputTokens,
+            costUsd: res.record.costUsd,
+            // 費用は「実測のトークン数 × 登録した単価」。単価が未登録なら null（推測しない）
+            costBasis: res.record.costUsd === null ? 'unpriced' : 'measured_tokens_x_registered_price',
+            latencyMs: res.latencyMs,
+            attempts: res.attempts,
+          },
           input: `[system]\n${prompt.system}\n\n[user]\n${prompt.user}`,
           output: text,
         });

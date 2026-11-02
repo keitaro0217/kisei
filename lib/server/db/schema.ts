@@ -367,4 +367,61 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS rc_traces_flags_idx ON rc_traces (study_id) WHERE has_violation OR has_deviation OR has_error`,
     ],
   },
+  {
+    id: '2026-11-04-001-evaluation-validation',
+    description: '評価のレビュー（追記のみの履歴）、外部ラベル付きデータセット（版・固定）とラベル',
+    statements: [
+      // 評価器ごとの判定に対する人のレビュー（承認・修正・却下）。履歴として追記のみ（更新・削除は拒否）
+      `CREATE TABLE IF NOT EXISTS rc_evaluation_reviews (
+         id text PRIMARY KEY,
+         study_id text NOT NULL REFERENCES rc_studies(id) ON DELETE RESTRICT,
+         item_key text NOT NULL,
+         evaluator_id text NOT NULL,
+         action text NOT NULL CHECK (action IN ('approve', 'correct', 'reject')),
+         corrected_category text CHECK (corrected_category IS NULL OR corrected_category IN ('compliant', 'explicit_violation', 'intent_deviation', 'contested', 'insufficient_evidence', 'unevaluable')),
+         reviewer text NOT NULL,
+         note text NOT NULL DEFAULT '',
+         at timestamptz NOT NULL DEFAULT now(),
+         CHECK ((action = 'correct') = (corrected_category IS NOT NULL))
+       )`,
+      `CREATE INDEX IF NOT EXISTS rc_evaluation_reviews_item_idx ON rc_evaluation_reviews (study_id, item_key, evaluator_id, at)`,
+      `DROP TRIGGER IF EXISTS rc_evaluation_reviews_immutable ON rc_evaluation_reviews`,
+      `CREATE TRIGGER rc_evaluation_reviews_immutable BEFORE UPDATE OR DELETE ON rc_evaluation_reviews FOR EACH ROW EXECUTE FUNCTION rc_reject_change()`,
+      // 外部ラベル付きデータセット（名前ごとに版を持つ。固定した版はラベルを変更できない）
+      `CREATE TABLE IF NOT EXISTS rc_label_sets (
+         id text PRIMARY KEY,
+         project_id text NOT NULL DEFAULT 'default' REFERENCES rc_projects(id) ON DELETE RESTRICT,
+         name text NOT NULL,
+         version integer NOT NULL CHECK (version >= 1),
+         purpose text NOT NULL CHECK (purpose IN ('evaluation_test', 'external_gold')),
+         frozen boolean NOT NULL DEFAULT false,
+         created_at timestamptz NOT NULL DEFAULT now(),
+         data jsonb NOT NULL,
+         UNIQUE (project_id, name, version)
+       )`,
+      `CREATE TABLE IF NOT EXISTS rc_labels (
+         set_id text NOT NULL REFERENCES rc_label_sets(id) ON DELETE CASCADE,
+         study_id text NOT NULL REFERENCES rc_studies(id) ON DELETE RESTRICT,
+         condition_id text NOT NULL,
+         replicate integer NOT NULL,
+         step integer NOT NULL,
+         annotator text NOT NULL,
+         category text NOT NULL CHECK (category IN ('compliant', 'explicit_violation', 'intent_deviation', 'contested', 'insufficient_evidence', 'unevaluable')),
+         formal text CHECK (formal IS NULL OR formal IN ('compliant', 'violation')),
+         note text NOT NULL DEFAULT '',
+         at timestamptz NOT NULL DEFAULT now(),
+         PRIMARY KEY (set_id, study_id, condition_id, replicate, step, annotator)
+       )`,
+      // 固定した版のラベルは変更・削除できない
+      `CREATE OR REPLACE FUNCTION rc_protect_frozen_labels() RETURNS trigger LANGUAGE plpgsql AS $$
+       BEGIN
+         IF EXISTS (SELECT 1 FROM rc_label_sets WHERE id = COALESCE(NEW.set_id, OLD.set_id) AND frozen) THEN
+           RAISE EXCEPTION '固定したデータセットのラベルは変更できません（新しい版を作成してください）' USING ERRCODE = 'insufficient_privilege';
+         END IF;
+         RETURN COALESCE(NEW, OLD);
+       END $$`,
+      `DROP TRIGGER IF EXISTS rc_labels_frozen ON rc_labels`,
+      `CREATE TRIGGER rc_labels_frozen BEFORE INSERT OR UPDATE OR DELETE ON rc_labels FOR EACH ROW EXECUTE FUNCTION rc_protect_frozen_labels()`,
+    ],
+  },
 ];

@@ -2,7 +2,23 @@ import type { IntentLabel } from './eval-types';
 
 // Failure（逸脱の疑い）・回帰テストケース・原因仮説の共有型。
 
-export type FailureCategory = 'formal_violation' | 'intent_deviation' | 'boundary_exploitation';
+export type FailureCategory =
+  | 'formal_violation'
+  | 'intent_deviation'
+  | 'boundary_exploitation'
+  /** 統計的に外れた行動（同じ条件の他の行動と比べて極端な数量など）。違反の判定ではない */
+  | 'anomalous_behavior'
+  /** 評価器の間で趣旨の判定が割れた（人の確認が必要） */
+  | 'evaluation_disagreement'
+  /** 行動を解釈できず評価できなかった */
+  | 'unevaluable'
+  /** 不適切なツールの使用（ツールのある評価環境のみ。金融市場シミュレーションにはツールがないため検出しない） */
+  | 'inappropriate_tool_use'
+  /** 権限外の情報の利用（情報のアクセス制御のある評価環境のみ。現在の環境では検出しない） */
+  | 'unauthorized_information_use';
+
+/** 検出の確信度（重大度とは別。high = 決定論的な判定、medium = 複数の評価器が一致、low = 単一の確率的な評価・統計的な外れ値・評価の不一致） */
+export type FailureConfidence = 'high' | 'medium' | 'low';
 export type FailureSeverity = 'low' | 'medium' | 'high';
 export type FailureStatus = 'new' | 'confirmed' | 'dismissed';
 
@@ -27,6 +43,13 @@ export type Failure = {
   graderVersions: string[];
   /** 重大度は機械的な初期値（形式違反 = high、趣旨逸脱 = medium、閾値付近 = low）。人が確認して変更できる */
   severity: FailureSeverity;
+  /** 検出の確信度（Phase 2 以降。以前の記録にはない） */
+  confidence?: FailureConfidence;
+  /** 検出に使った評価器の ID と、複合評価の集約ロジックの版（Phase 2 以降） */
+  evaluators?: string[];
+  evaluationVersion?: string;
+  /** 再現に必要な情報（Phase 2 以降） */
+  replay?: { seed: number | null; frozenHash: string | null; traceAvailable: boolean; note: string };
   status: FailureStatus;
   /** 形式判定は記録した状態から決定論的に再現できる。行動そのものはモデルの確率性のため再現が保証されない */
   reproducibility: 'formal_replay_deterministic';
@@ -58,6 +81,27 @@ export type FailureCluster = {
   known: boolean;
   testCases: number;
   hypotheses: number;
+  /** Phase 2: 検索・比較用の属性 */
+  industries?: string[];
+  models?: string[];
+  causes?: CauseCategory[];
+  /** 修正の状況: none = 修正案なし、proposed = 修正案あり、approved = 実験用に承認、recommended = 提案として承認 */
+  fixStatus?: 'none' | 'proposed' | 'approved' | 'recommended';
+  /** 検証の結果: 回帰テストの最新の判定、または仮説の検証結果 */
+  verification?: 'not_verified' | 'PASS' | 'FAIL' | 'INCONCLUSIVE' | 'REVIEW_REQUIRED' | 'hypothesis_supported' | 'hypothesis_refuted';
+  confidence?: FailureConfidence;
+};
+
+export type FailureLibraryFilter = {
+  q?: string;
+  ruleKey?: string;
+  industry?: string;
+  category?: FailureCategory;
+  cause?: CauseCategory;
+  model?: string;
+  severity?: FailureSeverity;
+  fixStatus?: NonNullable<FailureCluster['fixStatus']>;
+  verification?: NonNullable<FailureCluster['verification']>;
 };
 
 export type TestDataset = 'known_failure' | 'normal_behavior' | 'boundary' | 'previously_fixed';
@@ -113,6 +157,24 @@ export type HypothesisFactor =
   | 'rules_not_presented'
   | 'objective_incentive'
   | 'threshold'
+  | 'evaluator_error'
+  | 'exception_clause';
+
+/**
+ * 原因候補の分類（Phase 2）。要因（factor）を、規則・提示・環境・評価器のどこにあるかで分類する。
+ * rag_retrieval / access_control / tool_permission は、それぞれの仕組みを持つ評価環境でのみ生成する（現在の金融市場シミュレーションにはない）。
+ */
+export type CauseCategory =
+  | 'rule_ambiguity'
+  | 'conjunction_qualifier'
+  | 'exception_clause'
+  | 'objective_function'
+  | 'prompt'
+  | 'reference_document'
+  | 'rag_retrieval'
+  | 'access_control'
+  | 'tool_permission'
+  | 'simulation_environment'
   | 'evaluator_error';
 
 export type Intervention =
@@ -153,6 +215,14 @@ export type Hypothesis = {
   /** 介入で変わる要因（原則1つ。複数の場合は解釈に注意） */
   changedFactors: string[];
   status: HypothesisStatus;
+  /** 原因候補の分類（Phase 2 以降） */
+  cause?: CauseCategory;
+  /** 反証条件: この結果が出たら仮説は支持されない（実験の前に固定する） */
+  falsification?: string;
+  /** 仮説の検証に必要な比較実験 */
+  requiredExperiment?: string;
+  /** 検証の結果（比較実験の後）。supported でも「この条件・この標本で効果が観察された」ことを示すだけで、一般的な因果の立証ではない */
+  verification?: { result: 'supported' | 'refuted' | 'inconclusive'; summary: string; studyId: string; at: string } | null;
   experimentStudyId: string | null;
   effect: EffectEstimate | null;
   history: { status: HypothesisStatus; at: string; by: string; note: string }[];

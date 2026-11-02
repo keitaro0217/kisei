@@ -19,6 +19,8 @@ export type EvidenceItem = { id: string; kind: 'market' | 'action' | 'enforcemen
 
 export type JudgeVerdict = {
   intent: IntentLabel | null;
+  /** intent が uncertain の場合の詳細（v2 以降）。contested = 解釈に争いあり、insufficient_evidence = 証拠不足。v1 では null */
+  intentDetail?: 'contested' | 'insufficient_evidence' | null;
   rationale: string;
   evidenceIds: string[];
   /** 引用された ID のうち、渡した証拠に存在しないもの */
@@ -49,6 +51,8 @@ export type EvalRun = {
   sample: string[];
   sampleStrategy: 'all_flagged_then_random' | 'random';
   sampleSeed: number;
+  /** Judge に渡す証拠の順序（評価順序の影響の検証用）。以前の評価の実行にはない（= default） */
+  evidenceOrder?: 'default' | 'reversed';
   status: EvalRunStatus;
   statusReason: string | null;
   completed: number;
@@ -73,8 +77,10 @@ export type Annotation = {
   reason: string;
   /** AI Judge の判定を修正した場合、その Judge の評価 ID */
   correctsRunId: string | null;
+  /** 6分類での判定（Phase 2 以降。以前の評価にはない） */
+  category?: import('./evaluation-model').EvalCategory | null;
   updatedAt: string;
-  history: { intent: IntentLabel; formalCorrect: boolean | null; reason: string; at: string }[];
+  history: { intent: IntentLabel; formalCorrect: boolean | null; reason: string; at: string; category?: import('./evaluation-model').EvalCategory | null }[];
 };
 
 export type AgreementStats = {

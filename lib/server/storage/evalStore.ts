@@ -101,7 +101,7 @@ export async function upsertAnnotation(a: Omit<Annotation, 'history' | 'updatedA
     const next: Annotation = {
       ...a,
       updatedAt: now,
-      history: prev ? [...prev.history, { intent: prev.intent, formalCorrect: prev.formalCorrect, reason: prev.reason, at: prev.updatedAt }].slice(-50) : [],
+      history: prev ? [...prev.history, { intent: prev.intent, formalCorrect: prev.formalCorrect, reason: prev.reason, at: prev.updatedAt, category: prev.category ?? null }].slice(-50) : [],
     };
     await tx.query(
       `INSERT INTO rc_annotations (study_id, condition_id, replicate, step, annotator, updated_at, data) VALUES ($1, $2, $3, $4, $5, $6, $7::text::jsonb)
