@@ -180,3 +180,22 @@ describe('構造化ログ', () => {
     expect(out).toContain('j1');
   });
 });
+
+describe('ヘルスチェック・運用状況', () => {
+  it('ヘルスチェックは認証なしで使え、構成の詳細を返さない。運用状況は認証が必要', async () => {
+    const { proxy } = await import('@/proxy');
+    const { NextRequest } = await import('next/server');
+    expect(proxy(new NextRequest('http://localhost/api/health', { headers: { 'x-forwarded-for': '192.0.2.90' } })).status).toBe(200);
+    const { GET } = await import('@/app/api/health/route');
+    const res = await GET();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'ok', database: 'ok' });
+    expect(proxy(new NextRequest('http://localhost/api/research/ops', { headers: { 'x-forwarded-for': '192.0.2.91' } })).status).toBe(401);
+    const { operationsStatus } = await import('@/lib/server/ops');
+    const ops = await operationsStatus();
+    expect(ops.database.pendingMigrations).toEqual([]);
+    expect(ops.audit.ok).toBe(false); // 前のテストで改ざんを再現したため
+    const text = JSON.stringify(ops);
+    expect(text).not.toMatch(/postgres(ql)?:\/\/|\bsk-[A-Za-z0-9]{8,}/);
+  });
+});
