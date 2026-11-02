@@ -43,12 +43,19 @@ export default function ProviderQuickCard({
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<Msg>(null);
   const [result, setResult] = useState<ConnectionTestResult | null>(null);
-  const [adv, setAdv] = useState(() => ({
-    timeoutMs: String(provider?.timeoutMs ?? 60000),
-    maxRetries: String(provider?.maxRetries ?? 2),
-    maxConcurrency: String(provider?.maxConcurrency ?? 4),
-    monthlyBudgetUsd: provider?.monthlyBudgetUsd === null || provider?.monthlyBudgetUsd === undefined ? '' : String(provider.monthlyBudgetUsd),
-  }));
+  const advFrom = (p: ProviderDTO | null) => ({
+    timeoutMs: String(p?.timeoutMs ?? 60000),
+    maxRetries: String(p?.maxRetries ?? 2),
+    maxConcurrency: String(p?.maxConcurrency ?? 4),
+    monthlyBudgetUsd: p?.monthlyBudgetUsd === null || p?.monthlyBudgetUsd === undefined ? '' : String(p.monthlyBudgetUsd),
+  });
+  const [adv, setAdv] = useState(() => advFrom(provider));
+  // 接続先が作成・削除されたとき（ID が変わったとき）だけ詳細設定の入力値を合わせる（入力中の値は上書きしない）
+  const [advFor, setAdvFor] = useState(provider?.id ?? null);
+  if ((provider?.id ?? null) !== advFor) {
+    setAdvFor(provider?.id ?? null);
+    setAdv(advFrom(provider));
+  }
 
   const status = provider ? connectionStatusLabels[provider.connection.status] : connectionStatusLabels.unconfigured;
   const models = provider ? chatModels(guide, provider.models) : [];

@@ -25,16 +25,19 @@ export async function quickConnect(input: Record<string, unknown>): Promise<{ pr
   }
   // モデルの一覧（失敗しても接続テストで原因を判定する）
   let models = record.models;
+  let listFailed = false;
   try {
-    models = await fetchModels(record.id);
+    models = await fetchModels(record.id, { timeoutMs: 15_000 });
   } catch {
-    // 認証エラーなどは接続テストの結果で表示する
+    // 認証エラー・通信エラーなどは接続テストの結果で表示する
+    listFailed = true;
   }
   const requested = typeof input.model === 'string' && input.model.trim() ? input.model.trim() : null;
   const current = (await getProviderRecord(record.id))!;
   const model = requested ?? current.defaultModel ?? suggestModel(guide, models);
   if (model && model !== current.defaultModel) await updateProvider(record.id, { defaultModel: model });
-  const result = await runConnectionTest(record.id, model);
+  // 一覧の取得に失敗した場合も、原因（キー無効・通信など）を判定して記録するため接続テストを行う（推論までは進まない）
+  const result = await runConnectionTest(record.id, model ?? (listFailed ? null : undefined));
   // 初めて接続できたサービスは、kisei 全体のデフォルトのモデルにする（すでに設定がある場合は変えない）
   if (result.ok && model) {
     await updateConfig((s) => {

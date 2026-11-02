@@ -250,10 +250,11 @@ export function runtimeFor(record: ProviderRecord): ProviderRuntime {
   return { type: record.type, baseUrl: record.baseUrl, apiKey, timeoutMs: record.timeoutMs };
 }
 
-export async function fetchModels(id: string): Promise<ModelInfo[]> {
+export async function fetchModels(id: string, opts: { timeoutMs?: number } = {}): Promise<ModelInfo[]> {
   const record = await getProviderRecord(id);
   if (!record) throw new ValidationError('プロバイダーが見つかりません。');
   const rt = runtimeFor(record);
+  if (opts.timeoutMs) rt.timeoutMs = Math.min(rt.timeoutMs, opts.timeoutMs);
   let models: ModelInfo[];
   try {
     models = await getAdapter(record.type).listModels(rt);

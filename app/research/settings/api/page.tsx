@@ -82,7 +82,7 @@ export default function ApiSettingsPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         {PROVIDER_GUIDES.map((g) => (
           <ProviderQuickCard
-            key={`${g.id}:${data.providers.find((p) => guideForProvider(p)?.id === g.id)?.id ?? 'new'}`}
+            key={g.id}
             guide={g}
             provider={data.providers.find((p) => guideForProvider(p)?.id === g.id) ?? null}
             basic={basic}
