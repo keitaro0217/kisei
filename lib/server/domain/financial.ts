@@ -110,7 +110,7 @@ export const financialMarketAdapter: DomainAdapter<FinancialState> = {
       ...result.intent.deviations.map((v) => ({ kind: 'rule' as const, ref: v.ruleKey, detail: `${v.code}: ${v.message}` })),
     ];
   },
-  mockAction(s, seed, _persona) {
+  mockAction(s, seed) {
     const e = s.exchange;
     const text = mockTraderResponse(seed, s.step, { price: s.prices[s.step], position: e.position, cash: e.cashCents / 100, openOrders: e.openOrders });
     return fromAttempted(parseTraderResponse(text).attempted);
