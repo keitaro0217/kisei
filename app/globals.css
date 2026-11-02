@@ -89,3 +89,10 @@ body:has(.research-root) {
   -webkit-backdrop-filter: blur(20px);
   border-right: 1px solid rgb(255 255 255 / 0.07);
 }
+
+/* ===== 研究デモ（/demo/research）: ホワイト基調。研究コンソールのテーマ（.research-root）とは独立 ===== */
+.kisei-demo {
+  font-family: 'Noto Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', system-ui, sans-serif;
+  color-scheme: light;
+  -webkit-font-smoothing: antialiased;
+}

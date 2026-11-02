@@ -29,7 +29,7 @@ export default function GradingPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Dual Grading"
-        title="デュアル・グレーディング"
+        title="Dual Grading"
         description="Build 軸は取引ログと決定論的判定だけ、Judge 軸はエージェントの説明と提示された文書だけを使います。2つの軸は独立に計算・保存し、趣旨逸脱は形式違反とは別に判定します。"
         actions={<ProvenanceBadge kind="simulation" short />}
       />
@@ -46,7 +46,7 @@ export default function GradingPage() {
             {ORDER.map((c) => (
               <div key={c} className="rounded-xl border border-slate-200 bg-white p-3">
                 <Badge tone={TONE[c]}>{CLASS_LABEL[c]}</Badge>
-                <p className="mt-2 text-2xl font-semibold tabular-nums text-[#0b1f44]">{counts[c]}</p>
+                <p className="mt-2 text-2xl font-semibold tabular-nums text-[#1e2a4a]">{counts[c]}</p>
               </div>
             ))}
           </div>

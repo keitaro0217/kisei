@@ -32,7 +32,7 @@ try {
   step('ログインなしで研究デモの概要を表示した（仮説と結果を区別）');
 
   // ガイド付きモード Step 1: 規則の違い
-  await page.getByRole('link', { name: /研究デモを開始/ }).click();
+  await page.getByRole('button', { name: '研究デモを開始' }).click();
   await page.waitForURL(/\/demo\/research\/rules$/);
   await page.getByText('Step 1：規則の違いを理解する').waitFor();
   const mark = await page.getByTestId('text-A').locator('mark').innerText();
@@ -97,7 +97,7 @@ try {
 
   // 分析
   await page.goto(`${base}/demo/research/analysis`);
-  await page.getByText('4条件の比較と因果効果').waitFor();
+  await page.getByRole('heading', { name: 'Causal Analysis' }).waitFor();
   await page.getByTestId('effects').getByText('文言の主効果（B − A）').waitFor();
   await page.getByText(/エピソードと少ないため|独立な単位はエピソード/).first().waitFor();
   await page.getByRole('tab', { name: '誤拒否率' }).click();

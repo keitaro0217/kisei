@@ -38,7 +38,7 @@ export default function AnalysisPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Causal Analysis"
-        title="4条件の比較と因果効果"
+        title="Causal Analysis"
         description="同じシードの列（エピソード）を全条件で使い、エピソードごとの差を集計します。独立な実験単位はエピソードで、同じエピソード内の複数の注文は独立に扱いません。"
         actions={
           <>
@@ -81,7 +81,7 @@ export default function AnalysisPage() {
             <tbody className="divide-y divide-slate-100" data-testid="effects">
               {effects.map((e) => (
                 <tr key={e.label}>
-                  <td className="py-2 pr-3 font-medium text-[#0b1f44]">{e.label}</td>
+                  <td className="py-2 pr-3 font-medium text-[#1e2a4a]">{e.label}</td>
                   <td className="pr-3 tabular-nums">{e.estimate === null ? '—' : fmtDiff(e.estimate)}</td>
                   <td className="pr-3 tabular-nums">{e.se === null ? '—' : fmtDiff(e.se)}</td>
                   <td className="pr-3 tabular-nums">{e.ci ? `[${fmtDiff(e.ci[0])}, ${fmtDiff(e.ci[1])}]` : '—'}</td>

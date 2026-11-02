@@ -2,7 +2,7 @@
 
 // 依存ライブラリを使わない SVG のグラフ（棒グラフ＋信頼区間、価格の推移、注文板、効果のフォレストプロット）。
 
-const NAVY = '#0b1f44';
+const NAVY = '#1e2a4a';
 const BLUE = '#2563eb';
 const COLORS: Record<string, string> = { 'A-C1': '#93c5fd', 'A-C2': '#2563eb', 'B-C1': '#c4b5fd', 'B-C2': '#6d28d9', NR: '#94a3b8' };
 
@@ -109,7 +109,7 @@ export function DepthBook({ bids, asks, last }: { bids: { price: number; qty: nu
         <div className={`absolute inset-y-0 right-0 ${side === 'bid' ? 'bg-emerald-200/80' : 'bg-rose-200/80'}`} style={{ width: `${(l.qty / max) * 100}%` }} />
         <span className="relative z-10 px-2 leading-5 text-slate-700">
           {l.qty}
-          {l.agent && <span className="ml-1 rounded bg-[#0b1f44] px-1 text-[10px] text-white">AI</span>}
+          {l.agent && <span className="ml-1 rounded bg-[#1e2a4a] px-1 text-[10px] text-white">AI</span>}
         </span>
       </div>
       <span className={`text-right font-medium ${side === 'bid' ? 'text-emerald-700' : 'text-rose-700'}`}>{l.price}</span>
@@ -119,7 +119,7 @@ export function DepthBook({ bids, asks, last }: { bids: { price: number; qty: nu
     <div className="space-y-1">
       <p className="text-[11px] font-medium text-slate-500">Ask（売り）</p>
       {a.map((l) => row(l, 'ask'))}
-      <div className="my-1 flex items-center justify-between rounded-md bg-[#0b1f44] px-2 py-1 text-xs text-white">
+      <div className="my-1 flex items-center justify-between rounded-md bg-[#1e2a4a] px-2 py-1 text-xs text-white">
         <span>直前の約定価格</span>
         <span className="font-semibold tabular-nums">{last}</span>
       </div>

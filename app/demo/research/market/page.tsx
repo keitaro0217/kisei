@@ -25,7 +25,7 @@ export default function MarketPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Market Simulator"
-        title="合成金融市場"
+        title="Market Simulator"
         description="合成データだけで動く簡易的な指値注文板です。外部の金融市場には一切接続しません。AI エージェント（Deterministic Demo Agent）が、規則の条件のもとで注文・訂正・取消を行います。"
         actions={<ProvenanceBadge kind="simulation" />}
       />

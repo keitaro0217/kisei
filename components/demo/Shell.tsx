@@ -8,15 +8,15 @@ import { Button, Toggle } from './ui';
 
 // サイドバー・ガイド付きモード・共通の ID の表示
 
-export const NAV = [
+export const NAV: { href: string; label: string; jp: string; tag?: string }[] = [
   { href: '/demo/research', label: 'Research Overview', jp: '研究の概要' },
-  { href: '/demo/research/rules', label: 'Rule Studio', jp: '条文ミニマルペア' },
-  { href: '/demo/research/market', label: 'Market Simulator', jp: '仮想市場' },
+  { href: '/demo/research/rules', label: 'Rule Studio', jp: '条文ミニマルペア', tag: 'A/B' },
+  { href: '/demo/research/market', label: 'Market Simulator', jp: '仮想市場', tag: 'LOB' },
   { href: '/demo/research/trace', label: 'Agent Trace', jp: '行動トレース' },
-  { href: '/demo/research/experiment', label: 'Experiment Builder', jp: '2×2 要因実験' },
+  { href: '/demo/research/experiment', label: 'Experiment Builder', jp: '2×2 要因実験', tag: '2×2' },
   { href: '/demo/research/analysis', label: 'Causal Analysis', jp: '因果分析' },
   { href: '/demo/research/grading', label: 'Dual Grading', jp: 'デュアル・グレーディング' },
-  { href: '/demo/research/patch', label: 'Auto-Patch & Verify', jp: '修正と検証' },
+  { href: '/demo/research/patch', label: 'Auto-Patch & Verify', jp: '修正と検証', tag: 'HIL' },
   { href: '/demo/research/report', label: 'Research Report', jp: '研究レポート' },
 ];
 
@@ -41,34 +41,33 @@ export default function Shell({ children }: { children: ReactNode }) {
     if (i !== null) router.push(GUIDE[i].href);
   };
   return (
-    <div className="kisei-demo min-h-screen bg-[#f6f8fc] text-slate-900">
+    <div className="kisei-demo min-h-screen bg-[#f7f8fb] text-slate-900">
       <div className="flex">
-        <aside className={`print:hidden fixed inset-y-0 left-0 z-30 w-64 border-r border-slate-200 bg-white transition-transform lg:static lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}>
+        <aside className={`print:hidden fixed inset-y-0 left-0 z-30 w-[288px] border-r border-slate-200 bg-white transition-transform lg:static lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}>
           <div className="flex h-full flex-col">
-            <Link href="/demo/research" className="block border-b border-slate-100 px-5 py-5" onClick={() => setOpen(false)}>
-              <span className="flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0b1f44] text-sm font-bold text-white">K</span>
-                <span>
-                  <span className="block text-[15px] font-semibold tracking-tight text-[#0b1f44]">Kisei Research Lab</span>
-                  <span className="block text-[11px] text-slate-500">Regulatory Intent &amp; Autonomous Agent Behavior</span>
-                </span>
+            <Link href="/demo/research" className="block border-b border-slate-200 px-5 py-6" onClick={() => setOpen(false)}>
+              <span className="block border-l-[3px] border-[#1e2a4a] pl-3">
+                <span className="block text-[18px] font-semibold tracking-tight text-[#1e2a4a]">Kisei Research Lab</span>
+                <span className="mt-0.5 block text-[12px] text-slate-500">Regulatory Intent &amp; Agent Behavior</span>
               </span>
             </Link>
-            <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="デモのページ">
+            <nav className="flex-1 overflow-y-auto px-3 py-5" aria-label="デモのページ">
+              <p className="mb-2 px-3 text-[11px] font-semibold tracking-[0.12em] text-slate-500">
+                PIPELINE <span className="font-normal tracking-normal text-slate-400">Research Workflow</span>
+              </p>
               {NAV.map((n, i) => {
                 const active = pathname === n.href;
                 return (
                   <Link
                     key={n.href}
                     href={n.href}
+                    title={n.jp}
                     onClick={() => setOpen(false)}
-                    className={`mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${active ? 'bg-blue-50 font-semibold text-[#1d4ed8]' : 'text-slate-600 hover:bg-slate-50 hover:text-[#0b1f44]'}`}
+                    className={`mb-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] transition ${active ? 'bg-indigo-50 font-medium text-[#4338ca]' : 'text-[#1e2a4a] hover:bg-slate-50'}`}
                   >
-                    <span className={`flex h-5 w-5 items-center justify-center rounded text-[10px] font-semibold ${active ? 'bg-[#1d4ed8] text-white' : 'bg-slate-100 text-slate-500'}`}>{i + 1}</span>
-                    <span>
-                      <span className="block leading-tight">{n.label}</span>
-                      <span className="block text-[11px] font-normal text-slate-400">{n.jp}</span>
-                    </span>
+                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${active ? 'bg-[#4f46e5] text-white' : 'bg-slate-100 text-slate-500'}`}>{i === 0 ? '◎' : i}</span>
+                    <span className="min-w-0 flex-1 truncate">{n.label}</span>
+                    {n.tag && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${n.tag === 'HIL' ? 'bg-[#4f46e5] text-white' : 'bg-emerald-50 text-emerald-700'}`}>{n.tag}</span>}
                   </Link>
                 );
               })}
@@ -81,7 +80,7 @@ export default function Shell({ children }: { children: ReactNode }) {
         </aside>
         {open && <button type="button" aria-label="メニューを閉じる" className="fixed inset-0 z-20 bg-slate-900/20 lg:hidden" onClick={() => setOpen(false)} />}
         <div className="min-w-0 flex-1">
-          <header className="print:hidden sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white/85 px-4 py-2.5 backdrop-blur sm:px-8">
+          <header className="print:hidden sticky top-0 z-10 flex flex-wrap items-center gap-3 bg-[#f7f8fb]/90 px-4 py-3 backdrop-blur sm:px-10">
             <button type="button" className="rounded-md border border-slate-200 px-2 py-1 text-sm lg:hidden" onClick={() => setOpen(true)} aria-label="メニュー">
               ☰
             </button>
@@ -112,7 +111,7 @@ export default function Shell({ children }: { children: ReactNode }) {
             </div>
           </header>
           {g !== null && (
-            <div className="print:hidden border-b border-blue-100 bg-gradient-to-r from-[#0b1f44] to-[#1d4ed8] px-4 py-3 text-white sm:px-8">
+            <div className="print:hidden border-b border-blue-100 bg-gradient-to-r from-[#1e2a4a] to-[#4f46e5] px-4 py-3 text-white sm:px-8">
               <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4">
                 <div className="flex gap-1" aria-hidden>
                   {GUIDE.map((_, i) => (
@@ -128,11 +127,11 @@ export default function Shell({ children }: { children: ReactNode }) {
                     前へ
                   </Button>
                   {g < GUIDE.length - 1 ? (
-                    <Button size="sm" className="bg-white text-[#0b1f44]" onClick={() => go(g + 1)}>
+                    <Button size="sm" className="bg-white text-[#1e2a4a]" onClick={() => go(g + 1)}>
                       次へ
                     </Button>
                   ) : (
-                    <Button size="sm" className="bg-white text-[#0b1f44]" onClick={() => go(null)}>
+                    <Button size="sm" className="bg-white text-[#1e2a4a]" onClick={() => go(null)}>
                       完了
                     </Button>
                   )}
@@ -140,7 +139,7 @@ export default function Shell({ children }: { children: ReactNode }) {
               </div>
             </div>
           )}
-          <main className="mx-auto max-w-6xl px-4 py-8 sm:px-8">{d.hydrated ? children : <p className="text-sm text-slate-500">読み込み中…</p>}</main>
+          <main className="max-w-[1640px] px-4 pb-12 pt-2 sm:px-10">{d.hydrated ? children : <p className="text-sm text-slate-500">読み込み中…</p>}</main>
         </div>
       </div>
     </div>
