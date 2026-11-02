@@ -130,7 +130,7 @@ export default function PatchPage() {
                     </Button>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
+                    <table className="w-full text-left text-xs [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
                       <thead className="text-slate-500">
                         <tr>
                           <th className="py-1.5 pr-2">指標</th>

@@ -58,7 +58,7 @@ export function Badge({ children, tone = 'slate' }: { children: ReactNode; tone?
     rose: 'bg-rose-50 text-rose-700 ring-rose-200',
     violet: 'bg-violet-50 text-violet-700 ring-violet-200',
   }[tone];
-  return <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${t}`}>{children}</span>;
+  return <span className={`inline-flex items-center whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${t}`}>{children}</span>;
 }
 
 export function Callout({ tone = 'info', title, children }: { tone?: 'info' | 'warn' | 'note'; title?: ReactNode; children?: ReactNode }) {

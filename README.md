@@ -6,6 +6,8 @@ AI エージェントの行動を記録し（Trace）、規則とその趣旨か
 複数のAIプロバイダー（OpenAI / Anthropic / Gemini / OpenAI互換 / Ollama）との連携・費用・監査も管理します。
 
 設計と実装状況は `docs/` を参照してください（`architecture-baseline.md`・`system-architecture.md`・`test-report.md` など）。
+**研究デモ（ログイン不要）: `/demo/research` — 合成規制サンドボックスで、条文ミニマルペアと 2×2 要因実験を体験できます（`docs/demo/research-demo.md`）。**
+
 **本番運用の準備状況（受入条件・未達項目・追加インフラの計画）は `docs/production-readiness.md` にまとめています。現在は「本番運用準備中」です。**
 
 ## セットアップ

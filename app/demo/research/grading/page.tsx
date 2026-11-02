@@ -55,7 +55,7 @@ export default function GradingPage() {
           </Callout>
           <Card title={`条件 ${d.condition} の注文ごとの評価`} subtitle="Build と Judge を並べて表示（新しい順）">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full text-left text-xs [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
                 <thead className="text-slate-500">
                   <tr>
                     <th className="py-2 pr-2">t</th>

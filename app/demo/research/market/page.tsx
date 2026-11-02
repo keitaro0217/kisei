@@ -73,7 +73,7 @@ export default function MarketPage() {
         <p className="mt-3 text-xs text-slate-500">速度は描画の間隔だけを変えます。各ステップの計算はシード・時刻から決まるため、同じ条件・同じシードなら速度にかかわらず同じ結果になります。</p>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Stat label="シミュレーション時刻" value={`t = ${m.t} / ${d.steps}`} />
         <Stat label="直前の約定価格" value={num(m.lastTrade)} />
         <Stat label="AI の保有" value={num(r.position)} sub={r.position < 0 ? '売り持ち' : r.position > 0 ? '買い持ち' : 'なし'} />
@@ -93,7 +93,7 @@ export default function MarketPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card title="AI エージェントの注文・訂正・取消" subtitle="新しい順（直近12件）">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
               <thead className="text-slate-500">
                 <tr>
                   <th className="py-1.5 pr-2">t</th>
@@ -125,7 +125,7 @@ export default function MarketPage() {
         </Card>
         <Card title="約定履歴" subtitle="直近20件（参加者: mm = マーケットメイカー、noise = ノイズトレーダー、AI = エージェント）">
           <div className="max-h-72 overflow-y-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
               <thead className="text-slate-500">
                 <tr>
                   <th className="py-1.5 pr-2">t</th>

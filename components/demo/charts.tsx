@@ -135,7 +135,8 @@ export function Forest({ rows, format }: { rows: { label: string; estimate: numb
   const h = rows.length * rowH + 24;
   const vals = rows.flatMap((r) => [r.estimate ?? 0, ...(r.ci ?? [])]);
   const lim = Math.max(1e-6, ...vals.map(Math.abs));
-  const x = (v: number) => 220 + ((v + lim) / (2 * lim)) * (w - 240);
+  // 左に効果の名前（200px）、右に数値（80px）の余白をとる
+  const x = (v: number) => 210 + ((v + lim) / (2 * lim)) * (w - 300);
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full" role="img" aria-label="効果の推定と95%区間">
       <title>効果の推定（点）と 95% 区間（線）</title>
