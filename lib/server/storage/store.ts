@@ -343,3 +343,11 @@ export async function listAuditEntries(limit: number): Promise<AuditEntry[]> {
 export async function resetStoreForTests() {
   await resetDbForTests();
 }
+
+/** 指定した対象（研究・Failure・仮説・修正案など）に関する監査ログ（古い順） */
+export async function listAuditByTargets(targets: string[], limit = 500): Promise<AuditEntry[]> {
+  if (targets.length === 0) return [];
+  const db = await getDb();
+  const rows = await db.query<{ data: AuditEntry }>(`SELECT data FROM rc_audit WHERE data->>'target' = ANY($1::text[]) ORDER BY at LIMIT $2`, [targets, limit]);
+  return rows.map((r) => r.data);
+}

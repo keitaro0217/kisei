@@ -127,5 +127,23 @@ describe('Auto-Patch と回帰テスト', () => {
 
     const overview = await patchOverview();
     expect(overview.find((o) => o.patch.id === promote.id)!.pareto).toBe(true);
+
+    // 一つの問題を起点に、発見から改善の検証までの全履歴をたどれる
+    const { reviewFailure } = await import('@/lib/server/research/failure/failures');
+    const { listFailures } = await import('@/lib/server/storage/failureStore');
+    const first = (await listFailures({ fingerprint: cluster.fingerprint }))[0];
+    await reviewFailure(first.id, { status: 'confirmed', reviewNote: '専門家が確認' }, actor);
+    const { issueLineage } = await import('@/lib/server/research/lineage');
+    const lineage = (await issueLineage(cluster.fingerprint))!;
+    const done = Object.fromEntries(lineage.stages.map((x) => [x.stage, x.done]));
+    expect(done).toMatchObject({ detected: true, reviewed: true, test_cases: true, patched: true, approved: true, regression_tested: true, reexperimented: true, recommended: true });
+    expect(lineage.summary.studies.map((x) => x.id)).toContain(s.id);
+    expect(lineage.includesMock).toBe(true);
+    const stagesInOrder = lineage.events.map((e) => e.stage);
+    expect(stagesInOrder.indexOf('detected')).toBeLessThan(stagesInOrder.indexOf('patched'));
+    expect(stagesInOrder.indexOf('patched')).toBeLessThan(stagesInOrder.lastIndexOf('regression_tested'));
+    expect(stagesInOrder).toContain('reviewed');
+    expect(lineage.events.some((e) => e.stage === 'reexperimented' && e.href === `/research/studies/${withExp.experimentStudyId}`)).toBe(true);
+    expect(await issueLineage('0000000000000000')).toBeNull();
   });
 });
