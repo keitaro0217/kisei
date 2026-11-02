@@ -250,6 +250,16 @@ describe('研究・評価・検証の流れ（モック・合成ルール）', (
     await expect(svc.addLabels(set.id, { csv: `study_id,condition_id,replicate,step,annotator,category\n${id},AND,0,0,a,wrong` }, actor)).rejects.toThrow(/category/);
     expect((await svc.addLabels(set.id, { csv: lines.join('\n') }, actor)).added).toBe(ds.length * 2);
     const v = await svc.validateLabelSet(set.id);
+    if (process.env.PHASE2_REPORT) {
+      const fmt = (r: { p: number | null; ci: [number, number] | null }) => (r.p === null ? '—' : `${r.p.toFixed(3)} [${r.ci![0].toFixed(3)}, ${r.ci![1].toFixed(3)}]`);
+      console.log('REPORT', JSON.stringify({
+        gold: v.gold,
+        metrics: v.metrics.map((m) => ({ ev: `${m.evaluator.kind}:${m.evaluator.name}`, status: m.status, n: m.n, acc: fmt(m.accuracy), kappa: m.kappa?.toFixed(3), kappaCi: m.kappaCi?.map((x) => x.toFixed(3)), macroF1: m.macroF1?.toFixed(3), weightedF1: m.weightedF1?.toFixed(3), P: fmt(m.binary.precision), R: fmt(m.binary.recall), FPR: fmt(m.binary.fpr), FNR: fmt(m.binary.fnr), support: Object.fromEntries(m.perClass.map((c) => [c.category, c.support])), warnings: m.warnings.length })),
+        formal: v.formalMetrics.map((m) => ({ n: m.n, P: fmt(m.binary.precision), R: fmt(m.binary.recall) })),
+        annotators: v.annotatorAgreement,
+        bias: v.bias.map((b) => ({ kind: b.kind, n: b.n, agreement: b.agreement, kappa: b.kappa })),
+      }, null, 1));
+    }
     expect(v.isTestData).toBe(true);
     expect(v.gold.disputed).toBeGreaterThan(0);
     const engine = v.metrics.find((m) => m.evaluator.kind === 'deterministic')!;

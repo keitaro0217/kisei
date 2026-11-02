@@ -113,6 +113,36 @@ export default function HypothesisPage() {
           </Card>
         </div>
 
+        <Card title="検証の計画と結果" description="原因の候補は、比較実験で検証するまで立証済みとして扱いません。反証条件は実験の前に固定しています。">
+          <dl className="grid gap-3 text-sm md:grid-cols-2">
+            <div>
+              <dt className="text-xs text-ink-300">原因候補の分類</dt>
+              <dd className="text-ink-50">{h.cause ?? '—（以前に作成した仮説）'}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-ink-300">検証の結果</dt>
+              <dd className="text-ink-50">
+                {h.verification ? (
+                  <>
+                    {h.verification.result === 'supported' ? 'この比較実験では支持' : h.verification.result === 'refuted' ? '反証（支持されない）' : '判断できない'}
+                    <span className="block text-xs text-ink-200">{h.verification.summary}</span>
+                  </>
+                ) : (
+                  '未検証（仮説の段階）'
+                )}
+              </dd>
+            </div>
+            <div className="md:col-span-2">
+              <dt className="text-xs text-ink-300">反証条件</dt>
+              <dd className="text-ink-100">{h.falsification ?? '—'}</dd>
+            </div>
+            <div className="md:col-span-2">
+              <dt className="text-xs text-ink-300">必要な比較実験</dt>
+              <dd className="text-ink-100">{h.requiredExperiment ?? '—'}</dd>
+            </div>
+          </dl>
+        </Card>
+
         <Card title="統制実験" description={`介入: ${h.intervention.description}。変える要因: ${h.changedFactors.join(', ')}。元の条件を対照（C）、要因だけを変えた条件を処置（T）とし、同じ市場・同じシードで実行します。`}>
           {!h.experimentStudyId ? (
             h.intervention.kind === 'none' ? (
