@@ -55,11 +55,16 @@ export default function StudyPage() {
         .catch((e) => setError(e.message)),
     [id],
   );
+  // 実行中だけ定期的に更新する（完了した研究の集計は件数が多いと重いため、繰り返し取得しない）
+  const live = data?.study.status === 'running';
   useEffect(() => {
     load();
+  }, [load]);
+  useEffect(() => {
+    if (!live) return;
     const t = setInterval(load, 3000);
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, live]);
 
   if (!data) return error ? <Alert kind="error" title="読み込みに失敗しました">{error}</Alert> : <Loading />;
   const { study, sessions, stats, regression } = data;
