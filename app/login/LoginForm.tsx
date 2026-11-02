@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-export default function LoginForm({ next }: { next: string }) {
+export default function LoginForm({ next, idleMinutes }: { next: string; idleMinutes: number }) {
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +40,8 @@ export default function LoginForm({ next }: { next: string }) {
 
   return (
     <form onSubmit={submit} noValidate>
-      <label htmlFor="password" className="text-xs font-medium text-ink-100">
-        パスワード
+      <label htmlFor="password" className="block text-center text-sm text-ink-100">
+        パスワードを入力してください
       </label>
       <div className="mt-1.5 flex gap-2">
         <input
@@ -50,6 +50,7 @@ export default function LoginForm({ next }: { next: string }) {
           type={show ? 'text' : 'password'}
           autoComplete="current-password"
           autoFocus
+          placeholder="パスワード"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="block w-full rounded-lg border-0 bg-ink-950/40 px-3 py-2.5 text-base text-white ring-1 ring-inset ring-white/15 placeholder:text-ink-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ink-500/50"
@@ -72,9 +73,11 @@ export default function LoginForm({ next }: { next: string }) {
       )}
       <button type="submit" disabled={busy} className="rc-primary mt-5 flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold">
         {busy && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden />}
-        ログイン
+        {busy ? '確認しています…' : 'ログイン'}
       </button>
-      <p className="mt-4 text-xs leading-relaxed text-ink-300">ログインの状態は12時間保持されます。共有の端末では、使い終わったらログアウトしてください。</p>
+      <p className="mt-4 text-center text-xs leading-relaxed text-ink-300">
+        ブラウザを閉じるか、{idleMinutes}分間操作がないと、もう一度パスワードが必要になります。
+      </p>
     </form>
   );
 }

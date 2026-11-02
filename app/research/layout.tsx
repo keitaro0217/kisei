@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import ResearchShell from '@/components/research/ResearchShell';
 import { authenticateHeaders } from '@/lib/server/auth';
+import { idleMinutes } from '@/lib/server/auth/session';
 import { getDatabaseUrl } from '@/lib/server/env';
 import { getSettings } from '@/lib/server/research/settings';
 import { safeMessage } from '@/lib/server/security/redact';
@@ -43,7 +44,7 @@ export default async function ResearchLayout({ children }: { children: React.Rea
     );
   }
   return (
-    <ResearchShell basic={settings.basic} principal={auth.principal.displayName}>
+    <ResearchShell basic={settings.basic} principal={auth.principal.displayName} idleMinutes={auth.principal.authMethod === 'session' ? idleMinutes() : null}>
       {children}
     </ResearchShell>
   );
