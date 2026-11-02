@@ -27,6 +27,11 @@ export function parseBasicAuthorization(header: string | null): { username: stri
   return { username: decoded.slice(0, sep), password: decoded.slice(sep + 1) };
 }
 
+/** ブラウザからのリクエスト（現在の主要なブラウザはすべて Sec-Fetch-* を送る。スクリプトや curl は送らない） */
+export function isBrowserRequest(headers: Headers): boolean {
+  return headers.has('sec-fetch-site') || headers.has('sec-fetch-mode') || headers.has('sec-fetch-dest');
+}
+
 export class BasicAuthProvider implements AuthProvider {
   readonly name = 'basic';
 
@@ -36,6 +41,9 @@ export class BasicAuthProvider implements AuthProvider {
     // 1. ログイン画面で発行したセッション Cookie（ブラウザからの利用）
     if (this.checkSession(headers).ok) return { ok: true, principal: this.principal('session') };
     // 2. Authorization ヘッダー（スクリプトなどブラウザ以外からの利用）
+    //    ブラウザ（Fetch Metadata のヘッダーを送る）からは受け付けない。以前の Basic 認証の資格情報を
+    //    ブラウザが記憶していると、ログアウトしてもログインしたままになるため、ブラウザはセッション Cookie だけで認証する。
+    if (isBrowserRequest(headers)) return { ok: false, reason: 'missing' };
     const credentials = parseBasicAuthorization(headers.get('authorization'));
     if (!credentials) return { ok: false, reason: 'missing' };
     // パスワードのみで照合する。ユーザー名は空欄でも何を入れてもよい
