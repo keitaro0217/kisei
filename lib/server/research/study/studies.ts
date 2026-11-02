@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { enqueueJob } from '../../jobs/queue';
+import { domainOf } from '@/lib/domain/descriptors';
+import { DomainSessionAborted, runDomainSession } from '../../domain/runner';
 import type { LlmErrorCategory, MarketConfig } from '@/lib/research/types';
 import type {
   AgentObjective,
@@ -106,6 +108,31 @@ function parseCondition(input: unknown, i: number): StudyCondition {
     objective,
     customObjective,
     persona,
+    ...(typeof c.agentPersona === 'string' && c.agentPersona ? { agentPersona: str(c.agentPersona, `conditions[${i}].agentPersona`, 40) } : {}),
+  };
+}
+
+/** 評価環境（ドメイン）と、そのシナリオ設定・業務プロセス。金融市場（既定）では何も追加しない */
+function parseDomain(input: Record<string, unknown>): Partial<StudyDesign> {
+  if (input.domain === undefined || input.domain === null || input.domain === '' || input.domain === 'financial_market') return {};
+  const d = domainOf(String(input.domain));
+  if (!d) throw new ValidationError('評価環境（ドメイン）が正しくありません。', 'domain');
+  const env = (input.environment ?? {}) as Record<string, unknown>;
+  const environment: Record<string, number> = {
+    steps: num(env.steps ?? 20, 'environment.steps', 1, 200, true),
+    threshold: num(env.threshold ?? 1_000_000, 'environment.threshold', 1, 1e12),
+    approvalDelay: num(env.approvalDelay ?? 2, 'environment.approvalDelay', 0, 30, true),
+    budget: num(env.budget ?? 30_000_000, 'environment.budget', 1, 1e13),
+    mismatchRate: num(env.mismatchRate ?? 0.15, 'environment.mismatchRate', 0, 1),
+  };
+  const bp = (input.businessProcess ?? null) as Record<string, unknown> | null;
+  const actions = d.actions.map((a) => a.type);
+  const permitted = bp && Array.isArray(bp.permittedActions) ? bp.permittedActions.filter((x): x is string => typeof x === 'string') : null;
+  if (permitted && !permitted.every((x) => actions.includes(x))) throw new ValidationError('行動の範囲に、この評価環境にない行動が含まれています。', 'businessProcess.permittedActions');
+  return {
+    domain: d.id,
+    environment,
+    businessProcess: bp ? { processId: typeof bp.processId === 'string' ? bp.processId : null, objective: str(bp.objective, 'businessProcess.objective', 1000), permittedActions: permitted } : null,
   };
 }
 
@@ -162,6 +189,7 @@ export function parseDesign(input: Record<string, unknown>): StudyDesign {
     market,
     agent,
     promptSetId: typeof input.promptSetId === 'string' && input.promptSetId ? input.promptSetId : null,
+    ...parseDomain(input),
     // 研究ごとの費用の上限（米ドル）。達したら研究を一時停止する。未指定なら上限なし（プロバイダーごとの月間予算は別に適用される）
     maxCostUsd: input.maxCostUsd === null || input.maxCostUsd === undefined || input.maxCostUsd === '' ? null : num(input.maxCostUsd, 'maxCostUsd', 0.01, 100_000),
   };
@@ -233,6 +261,10 @@ export async function startStudy(id: string, actor: Principal): Promise<Study> {
   const ruleIds = [...new Set(design.conditions.flatMap((c) => c.ruleVersionIds))];
   const rules = await getRuleVersions(ruleIds);
   if (rules.length !== ruleIds.length) throw new ValidationError('条件で選んだ規則の版の一部が見つかりません。');
+  // 規則は評価環境（ドメイン）ごとの変数で書かれているため、別のドメインの規則は使えない
+  const studyDomain = design.domain ?? 'financial_market';
+  const mismatch = rules.find((r) => (r.domain ?? 'financial_market') !== studyDomain);
+  if (mismatch) throw new ValidationError(`規則 ${mismatch.ruleKey} v${mismatch.version} は評価環境「${domainOf(mismatch.domain ?? 'financial_market')!.label}」用です。研究の評価環境と同じものを選んでください。`);
   const promptSet = await getPrompt(design.promptSetId);
   const config = await getConfig();
   let agentRole = null;
@@ -575,6 +607,45 @@ export async function runStudySlice(id: string, deadline: number): Promise<'done
           const tracer = new Tracer({ studyId: id, conditionId: s.conditionId, replicate: s.replicate }, tracePayloadModeOf(study));
           const model = study.frozen?.agentRole?.model ?? 'mock';
           try {
+            const domain = study.frozen!.design.domain ?? 'financial_market';
+            if (domain !== 'financial_market') {
+              // 金融以外のドメイン: 共通の実行ループ（ドメインアダプター）で実行し、ステップは rc_domain_steps に記録する
+              const fd = study.frozen!.design;
+              const cond = fd.conditions.find((c) => c.id === s.conditionId)!;
+              const rules = cond.ruleVersionIds.map((rid) => study.frozen!.rules.find((r) => r.id === rid)).filter((r): r is RuleVersion => Boolean(r));
+              const out = await runDomainSession(
+                {
+                  studyId: id,
+                  domain,
+                  environment: fd.environment ?? {},
+                  condition: cond,
+                  replicate: s.replicate,
+                  seed: s.seed,
+                  rules,
+                  agentRole: study.frozen!.agentRole,
+                  objective: fd.businessProcess?.objective ?? '',
+                  permittedActions: fd.businessProcess?.permittedActions ?? null,
+                  operational: { timeoutMs: study.frozen!.operational.timeoutMs, maxRetries: study.frozen!.operational.maxRetries },
+                },
+                shouldContinue,
+                tracer,
+              );
+              const flags = {
+                hasViolation: out.steps.some((x) => x.formal.violations.some((v) => v.ruleKey)),
+                hasDeviation: out.steps.some((x) => x.intent.deviations.length > 0),
+                hasBoundary: false,
+                model,
+              };
+              await completeSession(
+                s,
+                owner,
+                [],
+                { startedAt, finishedAt: new Date().toISOString(), finalValue: out.outcome.reward, pnl: null, error: null, domainOutcome: out.outcome },
+                { record: tracer.record(), flags },
+                out.steps,
+              );
+              return;
+            }
             const out = await runStudySession(study, s, shouldContinue, tracer);
             await completeSession(
               s,
@@ -584,7 +655,7 @@ export async function runStudySlice(id: string, deadline: number): Promise<'done
               { record: tracer.record(), flags: traceFlagsOf(out.decisions, model) },
             );
           } catch (e) {
-            if (e instanceof SessionAborted) {
+            if (e instanceof SessionAborted || e instanceof DomainSessionAborted) {
               await finishSession(s, owner, 'pending', { error: null });
               return;
             }

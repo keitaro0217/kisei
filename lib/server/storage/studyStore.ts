@@ -1,3 +1,4 @@
+import type { DomainStepRecord } from '@/lib/domain/model';
 import type {
   DecisionRecord,
   PromptSet,
@@ -193,6 +194,7 @@ const toSession = (r: SessionRow): StudySession => ({
   finishedAt: r.data.finishedAt ?? null,
   finalValue: r.data.finalValue ?? null,
   pnl: r.data.pnl ?? null,
+  ...(r.data.domainOutcome ? { domainOutcome: r.data.domainOutcome } : {}),
 });
 
 export async function listSessions(studyId: string): Promise<StudySession[]> {
@@ -220,6 +222,7 @@ export async function claimSessions(studyId: string, owner: string, limit: numbe
     );
     for (const r of rows) {
       await tx.query('DELETE FROM rc_decisions WHERE study_id = $1 AND condition_id = $2 AND replicate = $3', [r.study_id, r.condition_id, r.replicate]);
+      await tx.query('DELETE FROM rc_domain_steps WHERE study_id = $1 AND condition_id = $2 AND replicate = $3', [r.study_id, r.condition_id, r.replicate]);
     }
     return rows.map(toSession);
   });
@@ -312,6 +315,7 @@ export async function completeSession(
   decisions: DecisionRecord[],
   data: Partial<StudySession>,
   trace?: { record: TraceRecord; flags: TraceFlags },
+  domainSteps: DomainStepRecord[] = [],
 ): Promise<boolean> {
   const db = await getDb();
   return db.transaction(async (tx) => {
@@ -328,9 +332,23 @@ export async function completeSession(
         [d.studyId, d.conditionId, d.replicate, d.step, json(d)],
       );
     }
+    for (const d of domainSteps) {
+      await tx.query(
+        `INSERT INTO rc_domain_steps (study_id, condition_id, replicate, step, data) VALUES ($1, $2, $3, $4, $5::text::jsonb)
+          ON CONFLICT (study_id, condition_id, replicate, step) DO NOTHING`,
+        [d.studyId, d.conditionId, d.replicate, d.step, json(d)],
+      );
+    }
     if (trace) await upsertTraceIn(tx, trace.record, trace.flags);
     return true;
   });
+}
+
+/** 金融以外のドメインのステップの記録 */
+export async function listDomainSteps(studyId: string): Promise<DomainStepRecord[]> {
+  const db = await getDb();
+  const rows = await db.query<{ data: DomainStepRecord }>('SELECT data FROM rc_domain_steps WHERE study_id = $1 ORDER BY condition_id, replicate, step', [studyId]);
+  return rows.map((r) => r.data);
 }
 
 /** 指定した判断（条件・反復・ステップ）だけを取得する */
