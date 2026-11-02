@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { authenticateHeaders } from '@/lib/server/auth';
+import { getAuthProvider } from '@/lib/server/auth';
 import { idleMinutes, safeNextPath } from '@/lib/server/auth/session';
 import LoginForm from './LoginForm';
 
@@ -18,8 +18,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const raw = params.next;
   const next = safeNextPath(Array.isArray(raw) ? raw[0] : raw);
   const reason = REASONS[String(Array.isArray(params.reason) ? params.reason[0] : (params.reason ?? ''))] ?? null;
-  // すでにログインしている場合はそのまま移動する
-  if (authenticateHeaders(await headers()).ok) redirect(next);
+  // すでにログインしている（有効なセッション Cookie がある）場合はそのまま移動する。
+  // ログアウト直後は Cookie が削除されているため、必ずログイン画面を表示する。
+  if (getAuthProvider()?.checkSession(await headers()).ok) redirect(next);
   return (
     <div className="research-root flex min-h-screen items-center justify-center px-4 py-10">
       <main className="rc-glass w-full max-w-sm rounded-2xl px-7 py-8">
