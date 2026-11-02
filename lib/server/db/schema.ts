@@ -242,4 +242,129 @@ export const MIGRATIONS: Migration[] = [
        )`,
     ],
   },
+  {
+    id: '2026-11-03-001-production-foundation',
+    description: '組織・プロジェクト・利用者・所属、ジョブキュー、監査ログの改ざん検知と不変化、研究結果の不変化、状態の整合性制約、大量データ向けの索引',
+    statements: [
+      // ---- 組織・プロジェクト・利用者・所属（個人研究モードでは既定の組織とプロジェクトを1つずつ使う） ----
+      `CREATE TABLE IF NOT EXISTS rc_organizations (
+         id text PRIMARY KEY,
+         name text NOT NULL,
+         mode text NOT NULL CHECK (mode IN ('personal', 'team', 'enterprise')),
+         created_at timestamptz NOT NULL DEFAULT now()
+       )`,
+      `CREATE TABLE IF NOT EXISTS rc_projects (
+         id text PRIMARY KEY,
+         organization_id text NOT NULL REFERENCES rc_organizations(id) ON DELETE RESTRICT,
+         name text NOT NULL,
+         created_at timestamptz NOT NULL DEFAULT now(),
+         archived_at timestamptz,
+         UNIQUE (organization_id, name)
+       )`,
+      `CREATE TABLE IF NOT EXISTS rc_users (
+         id text PRIMARY KEY,
+         email text NOT NULL,
+         display_name text NOT NULL,
+         password_hash text,
+         status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+         created_at timestamptz NOT NULL DEFAULT now()
+       )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS rc_users_email_idx ON rc_users (lower(email))`,
+      `CREATE TABLE IF NOT EXISTS rc_memberships (
+         id text PRIMARY KEY,
+         user_id text NOT NULL REFERENCES rc_users(id) ON DELETE CASCADE,
+         organization_id text NOT NULL REFERENCES rc_organizations(id) ON DELETE CASCADE,
+         project_id text REFERENCES rc_projects(id) ON DELETE CASCADE,
+         role text NOT NULL CHECK (role IN ('owner', 'admin', 'researcher', 'reviewer', 'viewer')),
+         created_at timestamptz NOT NULL DEFAULT now()
+       )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS rc_memberships_scope_idx ON rc_memberships (user_id, organization_id, coalesce(project_id, ''))`,
+      `INSERT INTO rc_organizations (id, name, mode) VALUES ('default', '個人研究', 'personal') ON CONFLICT (id) DO NOTHING`,
+      `INSERT INTO rc_projects (id, organization_id, name) VALUES ('default', 'default', '既定のプロジェクト') ON CONFLICT (id) DO NOTHING`,
+      // 既存のデータは既定のプロジェクトに属させる（列の追加のみ。既存の行は既定値で埋まる）
+      ...['rc_studies', 'rc_experiments', 'rc_rules', 'rc_rule_pairs', 'rc_prompt_sets', 'rc_hypotheses', 'rc_patches', 'rc_test_cases', 'rc_poc'].flatMap((t) => [
+        `ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS project_id text NOT NULL DEFAULT 'default' REFERENCES rc_projects(id) ON DELETE RESTRICT`,
+        `CREATE INDEX IF NOT EXISTS ${t}_project_idx ON ${t} (project_id)`,
+      ]),
+      // ---- バックグラウンドジョブ（PostgreSQL のキュー。リースで排他し、冪等キーで重複を防ぐ） ----
+      `CREATE TABLE IF NOT EXISTS rc_jobs (
+         id text PRIMARY KEY,
+         project_id text NOT NULL DEFAULT 'default' REFERENCES rc_projects(id) ON DELETE RESTRICT,
+         kind text NOT NULL,
+         status text NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')),
+         idempotency_key text UNIQUE,
+         attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+         max_attempts integer NOT NULL DEFAULT 3 CHECK (max_attempts >= 1),
+         run_after timestamptz NOT NULL DEFAULT now(),
+         lease_owner text,
+         lease_until timestamptz,
+         last_error text,
+         payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+         result jsonb,
+         created_at timestamptz NOT NULL DEFAULT now(),
+         updated_at timestamptz NOT NULL DEFAULT now(),
+         finished_at timestamptz,
+         CHECK ((status = 'running') = (lease_until IS NOT NULL)),
+         CHECK ((status IN ('succeeded', 'failed', 'cancelled')) = (finished_at IS NOT NULL))
+       )`,
+      `CREATE INDEX IF NOT EXISTS rc_jobs_claim_idx ON rc_jobs (status, run_after)`,
+      `CREATE INDEX IF NOT EXISTS rc_jobs_created_idx ON rc_jobs (created_at DESC)`,
+      // ---- 監査ログ: 連番とハッシュの連鎖（改ざんの検知）。更新・削除はデータベースで拒否する ----
+      `ALTER TABLE rc_audit ADD COLUMN IF NOT EXISTS seq bigint`,
+      `ALTER TABLE rc_audit ADD COLUMN IF NOT EXISTS prev_hash text`,
+      `ALTER TABLE rc_audit ADD COLUMN IF NOT EXISTS hash text`,
+      // ハッシュの対象にした本文（保存時の文字列そのもの。jsonb はキーの順序を変えるため別に持つ）
+      `ALTER TABLE rc_audit ADD COLUMN IF NOT EXISTS body text`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS rc_audit_seq_idx ON rc_audit (seq) WHERE seq IS NOT NULL`,
+      `CREATE OR REPLACE FUNCTION rc_reject_change() RETURNS trigger LANGUAGE plpgsql AS $$
+       BEGIN
+         RAISE EXCEPTION '% は変更・削除できません（履歴として保護されています）', TG_TABLE_NAME USING ERRCODE = 'insufficient_privilege';
+       END $$`,
+      `DROP TRIGGER IF EXISTS rc_audit_immutable ON rc_audit`,
+      `CREATE TRIGGER rc_audit_immutable BEFORE UPDATE OR DELETE ON rc_audit FOR EACH ROW EXECUTE FUNCTION rc_reject_change()`,
+      // ---- 研究結果: 判断の記録は追記のみ。完了したセッションの記録は削除できない（途中で止まったセッションのやり直しは可） ----
+      `CREATE OR REPLACE FUNCTION rc_protect_decisions() RETURNS trigger LANGUAGE plpgsql AS $$
+       BEGIN
+         IF TG_OP = 'UPDATE' THEN
+           RAISE EXCEPTION '研究の判断の記録は変更できません' USING ERRCODE = 'insufficient_privilege';
+         END IF;
+         IF EXISTS (SELECT 1 FROM rc_study_sessions s WHERE s.study_id = OLD.study_id AND s.condition_id = OLD.condition_id
+                     AND s.replicate = OLD.replicate AND s.status = 'completed') THEN
+           RAISE EXCEPTION '完了したセッションの判断の記録は削除できません' USING ERRCODE = 'insufficient_privilege';
+         END IF;
+         RETURN OLD;
+       END $$`,
+      `DROP TRIGGER IF EXISTS rc_decisions_protect ON rc_decisions`,
+      `CREATE TRIGGER rc_decisions_protect BEFORE UPDATE OR DELETE ON rc_decisions FOR EACH ROW EXECUTE FUNCTION rc_protect_decisions()`,
+      // ---- 状態の整合性制約（既存の行は検証せず、新しい書き込みから適用する: NOT VALID） ----
+      ...(
+        [
+          ['rc_studies', 'rc_studies_status_chk', `status IN ('draft', 'running', 'paused', 'completed', 'stopped')`],
+          ['rc_study_sessions', 'rc_study_sessions_status_chk', `status IN ('pending', 'running', 'completed', 'failed') AND attempts >= 0`],
+          ['rc_experiments', 'rc_experiments_status_chk', `status IN ('queued', 'running', 'pausing', 'paused', 'stopping', 'stopped', 'completed', 'failed')`],
+          ['rc_eval_runs', 'rc_eval_runs_status_chk', `status IN ('running', 'completed', 'paused', 'failed')`],
+          ['rc_test_cases', 'rc_test_cases_status_chk', `status IN ('candidate', 'approved', 'rejected')`],
+          ['rc_patches', 'rc_patches_status_chk', `status IN ('draft', 'under_review', 'approved_for_simulation', 'simulation_completed', 'approved_for_recommendation', 'rejected', 'archived')`],
+          ['rc_hypotheses', 'rc_hypotheses_status_chk', `status IN ('HYPOTHESIS', 'SUPPORTED_BY_TRACE', 'EXPERIMENT_SCHEDULED', 'EXPERIMENT_TESTED', 'EVIDENCE_SUPPORTS_EFFECT', 'EVIDENCE_INCONCLUSIVE', 'EVIDENCE_AGAINST_EFFECT')`],
+          ['rc_monitor_alerts', 'rc_monitor_alerts_status_chk', `status IN ('open', 'acknowledged', 'resolved')`],
+        ] as const
+      ).map(
+        ([table, name, check]) => `DO $$ BEGIN
+           IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '${name}') THEN
+             ALTER TABLE ${table} ADD CONSTRAINT ${name} CHECK (${check}) NOT VALID;
+           END IF;
+         END $$`,
+      ),
+      // ---- 大量データ向けの索引（関連の参照・一覧の並び替え） ----
+      `CREATE INDEX IF NOT EXISTS rc_studies_created_idx ON rc_studies (created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS rc_eval_runs_study_idx ON rc_eval_runs (study_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS rc_hypotheses_fingerprint_idx ON rc_hypotheses (fingerprint, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS rc_test_cases_fingerprint_idx ON rc_test_cases (fingerprint)`,
+      `CREATE INDEX IF NOT EXISTS rc_regression_runs_patch_idx ON rc_regression_runs (patch_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS rc_patches_created_idx ON rc_patches (created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS rc_failures_created_idx ON rc_failures (created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS rc_monitor_alerts_source_idx ON rc_monitor_alerts (source_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS rc_traces_flags_idx ON rc_traces (study_id) WHERE has_violation OR has_deviation OR has_error`,
+    ],
+  },
 ];

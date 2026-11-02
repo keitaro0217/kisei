@@ -90,7 +90,10 @@ async function open(): Promise<Db> {
     await tx.query('SELECT pg_advisory_xact_lock(727001)');
     for (const statement of SCHEMA_STATEMENTS) await tx.query(statement);
     await tx.query('CREATE TABLE IF NOT EXISTS rc_schema_migrations (id text PRIMARY KEY, description text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())');
+    // 適用済みのマイグレーションは再実行しない（スキーマのバージョン管理）。未適用のものだけを順に適用する
+    const applied = new Set((await tx.query<{ id: string }>('SELECT id FROM rc_schema_migrations')).map((r) => r.id));
     for (const m of MIGRATIONS) {
+      if (applied.has(m.id)) continue;
       for (const statement of m.statements) await tx.query(statement);
       await tx.query('INSERT INTO rc_schema_migrations (id, description) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING', [m.id, m.description]);
     }

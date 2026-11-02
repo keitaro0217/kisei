@@ -6,6 +6,7 @@ AI エージェントの行動を記録し（Trace）、規則とその趣旨か
 複数のAIプロバイダー（OpenAI / Anthropic / Gemini / OpenAI互換 / Ollama）との連携・費用・監査も管理します。
 
 設計と実装状況は `docs/` を参照してください（`architecture-baseline.md`・`system-architecture.md`・`test-report.md` など）。
+**本番運用の準備状況（受入条件・未達項目・追加インフラの計画）は `docs/production-readiness.md` にまとめています。現在は「本番運用準備中」です。**
 
 ## セットアップ
 
@@ -132,6 +133,14 @@ Next.js 16 を使用しています。`middleware` は `proxy.ts` に名称変�
    - 実験詳細の画面を開いている間も、処理が止まっていれば自動で再開します。
 
 > プレビュー環境で「Vercel Authentication（デプロイ保護）」が有効だと、ワーカーの自己呼び出しが保護画面で止まります。その場合も Cron と画面表示による再開で処理は進みます。
+
+### 運用
+
+- `GET /api/health`: 死活監視用（認証不要）。DB に接続できれば `200 {"status":"ok"}`、できなければ `503`。構成の詳細は返しません。
+- 設定 → 運用状況: DB の応答時間・適用済みのマイグレーション・バックグラウンドジョブ（失敗の再実行）・処理が止まっている研究・監査ログの改ざん検知。
+- ログは1行1件の JSON（`LOG_LEVEL` = `debug` / `info` / `warn` / `error`、既定 `info`）。秘密情報を含みうる項目は出力しません。
+- バックアップと復旧の確認: `DATABASE_URL=... RESTORE_URL=<空の検証用DB> scripts/db-backup.sh verify`（手順は `docs/production-readiness.md`）。
+- 負荷試験: `LOAD_TEST=1 TEST_DATABASE_URL=... npx vitest run tests/load.test.ts`。
 
 ### テスト
 

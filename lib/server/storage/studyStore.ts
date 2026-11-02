@@ -346,3 +346,42 @@ export async function getDecisionsByKeys(studyId: string, keys: { conditionId: s
   );
   return rows.map((r) => r.data);
 }
+
+// ---------- 運用: 費用・処理の状況 ----------
+
+/** 研究で使った費用（判断ごとの記録の合計。単価が未登録の呼び出しは含まない） */
+export async function studySpentUsd(studyId: string): Promise<number> {
+  const db = await getDb();
+  const rows = await db.query<{ total: string | number | null }>(
+    `SELECT coalesce(sum((data->'usage'->>'costUsd')::numeric), 0) AS total FROM rc_decisions WHERE study_id = $1 AND data->'usage'->>'costUsd' IS NOT NULL`,
+    [studyId],
+  );
+  return Number(rows[0]?.total ?? 0);
+}
+
+export type StudyLiveness = {
+  /** active: ワーカーが処理中 / waiting: 処理待ち（次のワーカーを待っている） / stalled: 一定時間処理が進んでいない / idle: 処理するものがない */
+  state: 'active' | 'waiting' | 'stalled' | 'idle';
+  lastActivityAt: string | null;
+  remaining: number;
+};
+
+/** 画面の表示だけが進んで処理が止まっていないかを、セッションのリースと最終更新から判定する */
+export async function studyLiveness(studyId: string, stallMs = 10 * 60_000): Promise<StudyLiveness> {
+  const db = await getDb();
+  const rows = await db.query<{ live: number; remaining: number; last: Date | string | null }>(
+    `SELECT count(*) FILTER (WHERE status = 'running' AND lease_until >= now())::int AS live,
+            count(*) FILTER (WHERE status = 'pending' OR (status = 'running' AND lease_until < now()))::int AS remaining,
+            max(greatest(coalesce((data->>'finishedAt')::timestamptz, '-infinity'), coalesce((data->>'startedAt')::timestamptz, '-infinity'))) AS last
+       FROM rc_study_sessions WHERE study_id = $1`,
+    [studyId],
+  );
+  const r = rows[0];
+  const lastMs = r?.last ? new Date(r.last).getTime() : NaN;
+  const lastActivityAt = Number.isFinite(lastMs) ? new Date(lastMs).toISOString() : null;
+  const remaining = Number(r?.remaining ?? 0);
+  if (Number(r?.live ?? 0) > 0) return { state: 'active', lastActivityAt, remaining };
+  if (remaining === 0) return { state: 'idle', lastActivityAt, remaining };
+  const stalled = lastActivityAt === null ? false : Date.now() - lastMs > stallMs;
+  return { state: stalled ? 'stalled' : 'waiting', lastActivityAt, remaining };
+}

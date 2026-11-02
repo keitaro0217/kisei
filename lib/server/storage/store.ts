@@ -12,6 +12,7 @@ import type {
   UsageRecord,
   UsageTotals,
 } from '@/lib/research/types';
+import { createHash } from 'node:crypto';
 import { getDb, resetDbForTests, type Queryable } from '../db';
 import { addToTotals, emptyTotals } from '../research/totals';
 
@@ -297,9 +298,39 @@ export async function listUsageRecords(limit: number): Promise<UsageRecord[]> {
 
 // ---- 監査ログ ----
 
+/** 監査ログのハッシュ（直前の行のハッシュと本文から計算する。1行でも書き換えると以降の連鎖が一致しなくなる） */
+export function auditHash(prevHash: string | null, seq: number, body: string): string {
+  return createHash('sha256').update(`${prevHash ?? ''}\n${seq}\n${body}`, 'utf8').digest('hex');
+}
+
+/** 監査ログを追記する。連番とハッシュの連鎖を付ける（同時に書き込んでも連番が重複しないようロックを取る） */
 export async function insertAudit(entry: AuditEntry): Promise<void> {
   const db = await getDb();
-  await db.query('INSERT INTO rc_audit (id, at, data) VALUES ($1, $2, $3::text::jsonb)', [entry.id, entry.at, json(entry)]);
+  const body = json(entry);
+  await db.transaction(async (tx) => {
+    await tx.query('SELECT pg_advisory_xact_lock(727002)');
+    const last = (await tx.query<{ seq: string | number; hash: string }>('SELECT seq, hash FROM rc_audit WHERE seq IS NOT NULL ORDER BY seq DESC LIMIT 1'))[0];
+    const seq = last ? Number(last.seq) + 1 : 1;
+    const prev = last?.hash ?? null;
+    await tx.query('INSERT INTO rc_audit (id, at, data, seq, prev_hash, hash, body) VALUES ($1, $2, $3::text::jsonb, $4, $5, $6, $3)', [entry.id, entry.at, body, seq, prev, auditHash(prev, seq, body)]);
+  });
+}
+
+/** 監査ログの連鎖を検証する（連鎖の導入前の行は対象外）。本文の書き換え・行の削除・順序の入れ替えを検出する */
+export async function verifyAuditChain(): Promise<{ ok: boolean; checked: number; brokenAt: number | null }> {
+  const db = await getDb();
+  const rows = await db.query<{ seq: string | number; prev_hash: string | null; hash: string; body: string | null; same: boolean }>(
+    'SELECT seq, prev_hash, hash, body, (body IS NOT NULL AND body::jsonb = data) AS same FROM rc_audit WHERE seq IS NOT NULL ORDER BY seq',
+  );
+  let prev: string | null = null;
+  let expectedSeq = 1;
+  for (const r of rows) {
+    const seq = Number(r.seq);
+    if (seq !== expectedSeq || r.prev_hash !== prev || !r.same || r.body === null || r.hash !== auditHash(prev, seq, r.body)) return { ok: false, checked: rows.length, brokenAt: seq };
+    prev = r.hash;
+    expectedSeq++;
+  }
+  return { ok: true, checked: rows.length, brokenAt: null };
 }
 
 export async function listAuditEntries(limit: number): Promise<AuditEntry[]> {
@@ -311,4 +342,12 @@ export async function listAuditEntries(limit: number): Promise<AuditEntry[]> {
 /** テスト用: データベース接続を破棄する */
 export async function resetStoreForTests() {
   await resetDbForTests();
+}
+
+/** 指定した対象（研究・Failure・仮説・修正案など）に関する監査ログ（古い順） */
+export async function listAuditByTargets(targets: string[], limit = 500): Promise<AuditEntry[]> {
+  if (targets.length === 0) return [];
+  const db = await getDb();
+  const rows = await db.query<{ data: AuditEntry }>(`SELECT data FROM rc_audit WHERE data->>'target' = ANY($1::text[]) ORDER BY at LIMIT $2`, [targets, limit]);
+  return rows.map((r) => r.data);
 }

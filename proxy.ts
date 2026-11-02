@@ -6,7 +6,7 @@ import { configProblemsResponse } from '@/lib/server/configStatus';
 import { authFailureLimiter, clientKey, isCrossSiteWrite } from '@/lib/server/security/requestGuards';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
-const PUBLIC_PATHS = new Set(['/login', '/api/auth/login', '/api/auth/logout']);
+const PUBLIC_PATHS = new Set(['/login', '/api/auth/login', '/api/auth/logout', '/api/health']);
 
 function withSecurityHeaders(response: NextResponse, production: boolean): NextResponse {
   if (production) response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');

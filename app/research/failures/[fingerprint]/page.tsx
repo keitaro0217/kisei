@@ -56,9 +56,14 @@ export default function ClusterPage() {
         title={c.label}
         description={`分類: ${categoryOfFailureLabels[c.category]}・クラスター ID ${c.fingerprint}`}
         actions={
-          <Link href="/research/failures" className="rounded-md bg-white/5 px-3.5 py-1.5 text-sm text-ink-100 ring-1 ring-inset ring-white/15 hover:bg-white/10">
-            一覧へ
-          </Link>
+          <>
+            <Link href={`/research/failures/${c.fingerprint}/lineage`} className="rounded-md bg-white px-3.5 py-1.5 text-sm font-semibold text-black hover:bg-ink-100">
+              発見から改善までの全履歴
+            </Link>
+            <Link href="/research/failures" className="rounded-md bg-white/5 px-3.5 py-1.5 text-sm text-ink-100 ring-1 ring-inset ring-white/15 hover:bg-white/10">
+              一覧へ
+            </Link>
+          </>
         }
       />
       {error && (

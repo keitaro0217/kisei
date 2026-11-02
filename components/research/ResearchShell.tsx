@@ -62,6 +62,7 @@ export const settingsNav = [
   { href: '/research/settings/execution', label: '実行設定' },
   { href: '/research/settings/costs', label: '費用管理' },
   { href: '/research/settings/security', label: 'セキュリティ' },
+  { href: '/research/settings/operations', label: '運用状況' },
 ];
 
 function LogoutButton({ className }: { className: string }) {
