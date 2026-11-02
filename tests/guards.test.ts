@@ -165,6 +165,31 @@ describe('総当たり対策', () => {
     expect(proxy(new NextRequest('http://localhost/login', { headers: { 'x-forwarded-for': '192.0.2.52', accept: 'text/html' } })).status).toBe(200);
   });
 
+  it('ブラウザが記憶した Basic 認証の資格情報ではログインしたままにならない（ブラウザはセッション Cookie のみ）', async () => {
+    const { proxy } = await import('@/proxy');
+    const { NextRequest } = await import('next/server');
+    const browserPage = proxy(
+      new NextRequest('http://localhost/research', {
+        headers: { 'x-forwarded-for': '192.0.2.60', accept: 'text/html', authorization: basic('correct-horse-battery'), 'sec-fetch-site': 'same-origin', 'sec-fetch-mode': 'navigate' },
+      }),
+    );
+    expect(browserPage.status).toBe(303);
+    expect(browserPage.headers.get('location')).toMatch(/\/login\?next=/);
+    const browserApi = proxy(
+      new NextRequest('http://localhost/api/research/studies', { headers: { 'x-forwarded-for': '192.0.2.61', authorization: basic('correct-horse-battery'), 'sec-fetch-site': 'same-origin', 'sec-fetch-mode': 'cors' } }),
+    );
+    expect(browserApi.status).toBe(401);
+    // スクリプト（Sec-Fetch-* なし）からは引き続き使える
+    expect(proxy(new NextRequest('http://localhost/api/research/studies', { headers: { 'x-forwarded-for': '192.0.2.62', authorization: basic('correct-horse-battery') } })).status).toBe(200);
+  });
+
+  it('ログアウトはセッション Cookie を削除し、サイトの Cookie の削除も指示する', async () => {
+    const { POST } = await import('@/app/api/auth/logout/route');
+    const res = await POST();
+    expect(res.headers.get('clear-site-data')).toBe('"cookies"');
+    expect(res.headers.getSetCookie().some((c) => /kisei_session=;.*Max-Age=0/.test(c))).toBe(true);
+  });
+
   it('proxy は他サイトからの POST を 403 で拒否する', async () => {
     const { proxy } = await import('@/proxy');
     const { NextRequest } = await import('next/server');

@@ -101,6 +101,22 @@ try {
   step('新しいブラウザのセッションではパスワードが必要');
   await fresh.close();
 
+  // 以前の Basic 認証の資格情報をブラウザが記憶していても、ログアウトするとログイン画面になる
+  const cached = await browser.newContext({ httpCredentials: { username: 'x', password } });
+  const c = await cached.newPage();
+  await c.goto(`${base}/research`);
+  await c.waitForURL(/\/login/);
+  await c.getByPlaceholder('パスワード').fill(password);
+  await c.keyboard.press('Enter');
+  await c.waitForURL(/\/research$/);
+  await c.getByRole('button', { name: 'ログアウト' }).first().click();
+  await c.waitForURL(/\/login\?reason=logout/);
+  await c.getByText('ログアウトしました。').waitFor();
+  await c.reload();
+  await c.getByPlaceholder('パスワード').waitFor();
+  step('ブラウザが Basic 認証の資格情報を記憶していても、ログアウト後はログイン画面になる');
+  await cached.close();
+
   if (errors.length) throw new Error(`ページでエラーが発生しました: ${errors.join(' / ')}`);
   console.log('すべての手順が完了しました');
 } catch (e) {
