@@ -36,9 +36,9 @@ export const reasoningSupport: Record<ProviderType, 'effort' | 'thinkingBudget' 
 
 export const connectionStatusLabels: Record<ConnectionStatus, { label: string; className: string }> = {
   connected: { label: '接続済み', className: 'bg-emerald-500/10 text-emerald-300 ring-emerald-400/30' },
-  failed: { label: '接続失敗', className: 'bg-rose-500/10 text-rose-300 ring-rose-400/30' },
+  failed: { label: '接続エラー', className: 'bg-rose-500/10 text-rose-300 ring-rose-400/30' },
   unconfigured: { label: '未設定', className: 'bg-ink-800 text-ink-200 ring-ink-400/30' },
-  untested: { label: '未確認', className: 'bg-amber-500/10 text-amber-300 ring-amber-400/30' },
+  untested: { label: '未確認（接続テストが必要）', className: 'bg-amber-500/10 text-amber-300 ring-amber-400/30' },
 };
 
 export const errorCategoryLabels: Record<LlmErrorCategory, string> = {
@@ -61,10 +61,10 @@ export const errorCategoryLabels: Record<LlmErrorCategory, string> = {
 };
 
 export const roleLabels: Record<ResearchRole, { label: string; description: string }> = {
-  trading_agent: { label: '取引エージェント', description: '仮想金融市場で規則を解釈し、取引判断を行うAI' },
-  llm_judge: { label: 'LLM Judge', description: 'エージェントの判断説明、参照文書、取引ログを分析する評価用AI' },
-  auto_patch: { label: 'Auto-Patch', description: '規則や定義文書の修正候補を生成するAI' },
-  document_analysis: { label: '文書分析', description: '規制文書の構造解析、条文比較、関連文書検索などを支援するAI' },
+  trading_agent: { label: '取引エージェント', description: 'AIエージェントの意思決定: 仮想金融市場で規則を解釈し、取引判断を行う（研究プロジェクト・研究実験・シミュレーションで使用）' },
+  llm_judge: { label: 'LLM Judge', description: '行動結果の評価: 判断の説明・規則・取引ログから規制趣旨への適合を評価する（多層評価・研究実験の Judge で使用）' },
+  auto_patch: { label: 'Auto-Patch', description: '修正案の生成（この版の修正案はテンプレートで作るため、まだ使われていません）' },
+  document_analysis: { label: '文書分析', description: '規制文書の解釈・構造解析（文書ライブラリが未実装のため、まだ使われていません）' },
 };
 
 export const researchRoles: ResearchRole[] = ['trading_agent', 'llm_judge', 'auto_patch', 'document_analysis'];

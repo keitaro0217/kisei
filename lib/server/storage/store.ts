@@ -22,7 +22,9 @@ import { addToTotals, emptyTotals } from '../research/totals';
 
 export { emptyTotals };
 
-export type ProviderRecord = Omit<ProviderDTO, 'hasApiKey' | 'apiKeyMasked'> & {
+export type ProviderRecord = Omit<ProviderDTO, 'hasApiKey' | 'apiKeyMasked' | 'apiKeyReadable' | 'researchEnabled'> & {
+  /** 研究・実験での利用を許可するか（未設定の既存データは許可として扱う） */
+  researchEnabled?: boolean;
   /** AES-256-GCM で暗号化したAPIキー。平文は保存しない */
   encryptedApiKey: string | null;
   apiKeyHint: string | null;
@@ -35,6 +37,8 @@ export type Config = {
   roles: Record<ResearchRole, RoleAssignment>;
   prices: ModelPrice[];
   experimentVersions: ExperimentVersion[];
+  /** kisei 全体のデフォルトのモデル（用途ごとの割り当てがない場合に使う） */
+  defaultModel: { providerId: string; model: string } | null;
 };
 
 const defaultRole = (role: ResearchRole): RoleAssignment => ({
@@ -64,6 +68,7 @@ export function initialConfig(): Config {
     },
     prices: [],
     experimentVersions: [],
+    defaultModel: null,
   };
 }
 

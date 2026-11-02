@@ -54,6 +54,10 @@ export type ProviderDTO = {
   monthlyBudgetUsd: number | null;
   hasApiKey: boolean;
   apiKeyMasked: string | null;
+  /** 保存済みのキーを現在の暗号化鍵で復号できるか（キーがなければ null）。false は暗号化鍵の変更・紛失を示す */
+  apiKeyReadable: boolean | null;
+  /** 研究・実験での利用を許可するか */
+  researchEnabled: boolean;
   apiKeyUpdatedAt: string | null;
   connection: ProviderConnection;
   models: ModelInfo[];

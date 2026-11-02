@@ -6,6 +6,9 @@ import { LlmError, toLlmError } from '../llm/errors';
 import { getConfig, updateConfig } from '../storage/store';
 import { getProviderRecord, runtimeFor, ValidationError } from './providers';
 
+/** 接続テストのタイムアウト（実験より短くし、長く待たせない） */
+const TEST_TIMEOUT_MS = 20_000;
+
 const LABELS: Record<ConnectionTestStep['key'], string> = {
   api_key: 'APIキーの登録',
   network: '接続先との安全な通信',
@@ -66,6 +69,7 @@ export async function runConnectionTest(providerId: string, requestedModel?: str
   let rt;
   try {
     rt = runtimeFor(record);
+    rt.timeoutMs = Math.min(rt.timeoutMs, TEST_TIMEOUT_MS);
     step('api_key').status = 'ok';
     step('api_key').message = rt.apiKey ? '登録済み（暗号化して保存）' : 'このプロバイダーではAPIキーは任意です';
   } catch (e) {
@@ -136,6 +140,7 @@ export async function runConnectionTest(providerId: string, requestedModel?: str
       user: 'Reply with OK.',
       purpose: 'connection_test',
       maxRetries: 0,
+      timeoutMs: Math.min(record.timeoutMs, TEST_TIMEOUT_MS),
     });
     step('inference').status = 'ok';
     step('inference').message = `応答を受信しました（${res.latencyMs} ms / 入力 ${res.usage.inputTokens}・出力 ${res.usage.outputTokens} トークン）`;

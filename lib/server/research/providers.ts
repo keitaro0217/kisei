@@ -6,6 +6,7 @@ import { getAdapter } from '../llm/adapters';
 import { LlmError, toLlmError } from '../llm/errors';
 import type { ProviderRuntime } from '../llm/types';
 import { validateBaseUrl } from '../security/ssrf';
+import { getEncryptionKey } from '../env';
 import { countActiveExperimentsUsingProvider, getConfig, updateConfig, type ProviderRecord } from '../storage/store';
 
 export const PROVIDER_TYPES: ProviderType[] = ['openai', 'anthropic', 'gemini', 'openai_compatible', 'ollama'];
@@ -32,7 +33,29 @@ function connectionFor(record: ProviderRecord): ProviderConnection {
 /** フロントエンドへ返す形に変換する。暗号文・平文のAPIキーは含めない。 */
 export function toDTO(record: ProviderRecord): ProviderDTO {
   const { encryptedApiKey, apiKeyHint, ...rest } = record;
-  return { ...rest, hasApiKey: Boolean(encryptedApiKey), apiKeyMasked: encryptedApiKey ? apiKeyHint : null, connection: connectionFor(record) };
+  const readable = encryptedApiKey ? keyReadable(record) : null;
+  const connection =
+    readable === false
+      ? {
+          ...connectionFor(record),
+          status: 'failed' as const,
+          errorCategory: 'not_configured' as const,
+          message: getEncryptionKey()
+            ? '保存済みのAPIキーを復号できません（暗号化鍵 API_KEY_ENCRYPTION_KEY が変更された可能性があります）。APIキーを登録し直してください。'
+            : '暗号化鍵 API_KEY_ENCRYPTION_KEY が設定されていないため、保存済みのAPIキーを使えません。',
+        }
+      : connectionFor(record);
+  return { ...rest, researchEnabled: record.researchEnabled !== false, hasApiKey: Boolean(encryptedApiKey), apiKeyMasked: encryptedApiKey ? apiKeyHint : null, apiKeyReadable: readable, connection };
+}
+
+/** 保存済みのキーを現在の暗号化鍵で復号できるか（値は返さない） */
+function keyReadable(record: ProviderRecord): boolean {
+  try {
+    decryptSecret(record.encryptedApiKey!, record.id);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export type ProviderInput = {
@@ -44,6 +67,7 @@ export type ProviderInput = {
   maxRetries?: unknown;
   maxConcurrency?: unknown;
   monthlyBudgetUsd?: unknown;
+  researchEnabled?: unknown;
 };
 
 function intInRange(value: unknown, field: string, label: string, min: number, max: number): number {
@@ -147,6 +171,10 @@ export async function updateProvider(id: string, input: ProviderInput): Promise<
     if (input.maxRetries !== undefined) record.maxRetries = intInRange(input.maxRetries, 'maxRetries', '再試行回数', 0, 10);
     if (input.maxConcurrency !== undefined) record.maxConcurrency = intInRange(input.maxConcurrency, 'maxConcurrency', '同時実行数', 1, 64);
     if (input.monthlyBudgetUsd !== undefined) record.monthlyBudgetUsd = parseBudget(input.monthlyBudgetUsd);
+    if (input.researchEnabled !== undefined) {
+      if (typeof input.researchEnabled !== 'boolean') throw new ValidationError('研究での利用の設定が正しくありません。', 'researchEnabled');
+      record.researchEnabled = input.researchEnabled;
+    }
     record.updatedAt = new Date().toISOString();
     return toDTO(record);
   });
@@ -160,6 +188,7 @@ export async function deleteProvider(id: string): Promise<void> {
     const before = s.providers.length;
     s.providers = s.providers.filter((p) => p.id !== id);
     if (s.providers.length === before) throw new ValidationError('プロバイダーが見つかりません。');
+    if (s.defaultModel?.providerId === id) s.defaultModel = null;
     for (const role of Object.values(s.roles)) {
       if (role.providerId === id) {
         role.providerId = null;

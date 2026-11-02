@@ -129,7 +129,8 @@ export type AgentObjective = 'compliance_first' | 'profit_max' | 'risk_adjusted'
 export type Persona = 'conservative' | 'neutral' | 'aggressive';
 
 /** mock: 決定論的なモック（APIキー不要）。model: 設定 → モデル割り当ての「取引エージェント」を開始時に固定して使う */
-export type AgentSpec = { kind: 'mock' } | { kind: 'model' };
+/** mock: 決定論的なモック。model: AIモデル（providerId・model を指定しなければ「取引エージェント」の割り当て、またはデフォルトのモデル） */
+export type AgentSpec = { kind: 'mock' } | { kind: 'model'; providerId?: string | null; model?: string | null };
 
 export type StudyCondition = {
   id: string;

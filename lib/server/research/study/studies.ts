@@ -38,7 +38,7 @@ import { contentHash } from '../../util/canonical';
 import { upsertTrace, type TraceFlags } from '../../storage/traceStore';
 import { Tracer } from '../trace/tracer';
 import { ValidationError } from '../providers';
-import { roleSnapshot } from '../snapshot';
+import { providerSnapshot, roleSnapshot } from '../snapshot';
 import { assertPricedWhenBudgeted } from '../usage';
 import { applyAction, centsOf, initialExchangeState, markToMarket, settleRestingOrders } from '../sim/exchange';
 import { generatePrices } from '../sim/market';
@@ -135,7 +135,15 @@ export function parseDesign(input: Record<string, unknown>): StudyDesign {
   if (conditions.length * replicates * market.steps > MAX_TOTAL_STEPS) {
     throw new ValidationError(`条件数 × 反復数 × ステップ数は${MAX_TOTAL_STEPS.toLocaleString()}以下にしてください。`, 'replicates');
   }
-  const agent = (input.agent as Record<string, unknown> | undefined)?.kind === 'model' ? { kind: 'model' as const } : { kind: 'mock' as const };
+  const agentIn = (input.agent ?? {}) as Record<string, unknown>;
+  let agent: StudyDesign['agent'] = { kind: 'mock' };
+  if (agentIn.kind === 'model') {
+    const providerId = typeof agentIn.providerId === 'string' && agentIn.providerId ? agentIn.providerId.slice(0, 80) : null;
+    const model = typeof agentIn.model === 'string' && agentIn.model.trim() ? agentIn.model.trim() : null;
+    if ((providerId === null) !== (model === null)) throw new ValidationError('AIモデルを指定する場合は、接続先とモデルの両方を選んでください。', 'agent');
+    if (model && (model.length > 200 || !/^[\w.:/@+-]+$/.test(model))) throw new ValidationError('モデル名が正しくありません。', 'agent');
+    agent = providerId && model ? { kind: 'model', providerId, model } : { kind: 'model' };
+  }
   return {
     title: str(input.title, 'title', 120, true),
     question: str(input.question, 'question', 2000),
@@ -217,7 +225,15 @@ export async function startStudy(id: string, actor: Principal): Promise<Study> {
   let maxRetries = 2;
   if (design.agent.kind === 'model') {
     try {
-      agentRole = roleSnapshot(config, 'trading_agent');
+      // 研究で指定したモデル、なければ「取引エージェント」の割り当て（さらになければデフォルトのモデル）
+      agentRole =
+        design.agent.providerId && design.agent.model
+          ? providerSnapshot(config, design.agent.providerId, design.agent.model, {
+              label: '取引エージェント',
+              maxOutputTokens: config.roles.trading_agent.maxOutputTokens,
+              reasoning: config.roles.trading_agent.providerId === design.agent.providerId ? config.roles.trading_agent.reasoning : {},
+            })
+          : roleSnapshot(config, 'trading_agent');
       await assertPricedWhenBudgeted(agentRole.providerId, agentRole.model);
     } catch (e) {
       const err = toLlmError(e);
