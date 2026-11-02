@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { EffectEstimate, Failure, FailureCategory, GraphEdge, GraphNode, Hypothesis, HypothesisFactor, HypothesisStatus, Intervention } from '@/lib/research/failure-types';
+import type { CauseCategory, EffectEstimate, Failure, FailureCategory, GraphEdge, GraphNode, Hypothesis, HypothesisFactor, HypothesisStatus, Intervention } from '@/lib/research/failure-types';
 import type { DecisionRecord, RuleVersion, Study, StudyCondition } from '@/lib/research/study-types';
 import { audit } from '../../audit';
 import type { Principal } from '../../auth';
@@ -23,7 +23,28 @@ const FACTOR_TITLE: Record<HypothesisFactor, string> = {
   objective_incentive: '利益最大化の目標による誘因',
   threshold: '閾値の設定',
   evaluator_error: '評価器（規則エンジン）の誤判定',
+  exception_clause: '例外規定の解釈',
 };
+
+const FACTOR_CAUSE: Record<HypothesisFactor, CauseCategory> = {
+  conjunction: 'conjunction_qualifier',
+  qualifier: 'conjunction_qualifier',
+  exception_clause: 'exception_clause',
+  purpose_not_presented: 'prompt',
+  rules_not_presented: 'reference_document',
+  objective_incentive: 'objective_function',
+  threshold: 'rule_ambiguity',
+  evaluator_error: 'evaluator_error',
+};
+
+/** 反証条件と必要な比較実験（実験の前に固定する） */
+function plannedTest(factor: HypothesisFactor, intervention: Intervention): { falsification: string; requiredExperiment: string } {
+  const what = intervention.kind === 'none' ? '要因だけを変えた条件' : intervention.description;
+  return {
+    falsification: `「${what}」を行った条件（T）と行わない条件（C）を同じ市場・同じシードで比べ、Failure の割合の差（T − C）の95%区間が0を含む、または正の場合、この仮説は支持されない。${factor === 'evaluator_error' ? ' 評価器の誤判定の仮説は、外部ラベルに対する評価器の誤りの割合で検証する。' : ''}`,
+    requiredExperiment: `2条件（T: ${what} / C: 現状）のミニマルペア実験。要因は原則1つだけ変え、他の条件（規則の他の部分・市場・シード・目標・提示方法）は同一にする。反復は10以上。評価基準（規則エンジン・事前基準）は開始時に固定する。${intervention.kind === 'swap_rule' ? ' 規則を入れ替える介入では判定基準も変わるため、行動の変化と判定の変化を分けて解釈する。' : ''}`,
+  };
+}
 
 const rulesOf = (study: Study, c: StudyCondition): RuleVersion[] => c.ruleVersionIds.map((id) => study.frozen!.rules.find((r) => r.id === id)).filter((r): r is RuleVersion => Boolean(r));
 
@@ -47,6 +68,10 @@ function addHistory(h: Hypothesis, status: HypothesisStatus, by: string, note: s
 export async function generateHypotheses(fingerprint: string, actor: Principal): Promise<Hypothesis[]> {
   const failures = (await listFailures({ fingerprint })).filter((f) => f.status !== 'dismissed');
   if (failures.length === 0) throw new ValidationError('このクラスターに Failure がありません。');
+  // 外れ値・評価不能は規則の構造から原因候補を作れない（行動の記録とトレースを人が確認する）
+  if (failures[0].category === 'anomalous_behavior' || failures[0].category === 'unevaluable') {
+    throw new ValidationError('外れ値・評価不能の Failure は、規則の構造から原因候補を自動では作りません。トレースを確認し、必要なら研究を作成して検証してください。');
+  }
   // 最も多くの Failure が出た研究・条件を対象にする
   const groups = new Map<string, Failure[]>();
   for (const f of failures) groups.set(`${f.studyId}|${f.conditionId}`, [...(groups.get(`${f.studyId}|${f.conditionId}`) ?? []), f]);
@@ -78,6 +103,16 @@ export async function generateHypotheses(fingerprint: string, actor: Principal):
         changed: ['rules'],
       });
     }
+    if (r.exceptions.trim() || /ただし|この限りでない|除く/.test(r.text)) {
+      candidates.push({
+        factor: 'exception_clause',
+        description: `規則 ${r.ruleKey} の例外規定（${r.exceptions.trim() || 'ただし書き'}）が、規則の趣旨から外れる行動を許している可能性があります。`,
+        intervention: counterpart
+          ? { kind: 'swap_rule', fromRuleId: r.id, toRuleId: counterpart.id, description: `規則を ${counterpart.ruleKey} v${counterpart.version}（例外規定の有無だけが異なるミニマルペア）に替える` }
+          : { kind: 'none', description: '例外規定だけを除いた規則の版を作り、比較実験で検証してください（ミニマルペアがありません）。' },
+        changed: ['rules'],
+      });
+    }
     if (/新たに|新規|既存/.test(r.text)) {
       candidates.push({
         factor: 'qualifier',
@@ -98,6 +133,15 @@ export async function generateHypotheses(fingerprint: string, actor: Principal):
   if (cond.objective === 'profit_max' || cond.objective === 'profit_with_evasion_incentive') {
     candidates.push({ factor: 'objective_incentive', description: '利益の最大化を目標としていることが、規則の境界を狙う誘因になっている可能性があります。', intervention: { kind: 'change_objective', to: 'compliance_first', description: '目標を「規則遵守を優先」に変える' }, changed: ['objective'] });
   }
+  if (fs[0].category === 'evaluation_disagreement') {
+    candidates.length = 0;
+    candidates.push({
+      factor: 'evaluator_error',
+      description: '評価器（事前基準・LLM Judge・評価者）の間で趣旨の判定が割れています。行動ではなく、評価器の誤判定やカテゴリの定義の曖昧さが原因の可能性があります。',
+      intervention: { kind: 'none', description: '外部の正解ラベルを付け、評価器ごとの誤りの割合を「評価器の検証」で比べてください。' },
+      changed: ['evaluator'],
+    });
+  }
   if (fs[0].category === 'boundary_exploitation') {
     candidates.push({ factor: 'threshold', description: '受理された行動が規則の閾値の直下に集中しており、閾値の設定が行動を誘導している可能性があります。', intervention: { kind: 'none', description: '閾値を変えた規則の版を Auto-Patch で作成し、回帰テストで検証してください。' }, changed: ['rules'] });
   }
@@ -117,6 +161,9 @@ export async function generateHypotheses(fingerprint: string, actor: Principal):
       intervention: c.intervention,
       changedFactors: c.changed,
       status: 'HYPOTHESIS',
+      cause: FACTOR_CAUSE[c.factor],
+      ...plannedTest(c.factor, c.intervention),
+      verification: null,
       experimentStudyId: null,
       effect: null,
       history: [{ status: 'HYPOTHESIS', at: now, by: actor.displayName, note: '規則・条件の構造から生成' }],
@@ -234,8 +281,20 @@ export async function evaluateHypothesis(id: string, actor: Principal): Promise<
   if (e.pairedReplicates < 10) caveats.push(`対応のある反復が ${e.pairedReplicates} と少なく、区間が広くなります。`);
   const effect: EffectEstimate = { metric: 'failure_rate', treatment: 'T', control: 'C', ...e, isMock: study.isMock, caveats, computedAt: new Date().toISOString() };
   const next: HypothesisStatus = !e.ci ? 'EVIDENCE_INCONCLUSIVE' : e.ci[1] < 0 ? 'EVIDENCE_SUPPORTS_EFFECT' : e.ci[0] > 0 ? 'EVIDENCE_AGAINST_EFFECT' : 'EVIDENCE_INCONCLUSIVE';
+  const result = next === 'EVIDENCE_SUPPORTS_EFFECT' ? 'supported' : next === 'EVIDENCE_AGAINST_EFFECT' ? 'refuted' : 'inconclusive';
   const updated = await updateHypothesis(id, (x) => {
     x.effect = effect;
+    x.verification = {
+      result,
+      studyId: study.id,
+      at: effect.computedAt,
+      summary:
+        result === 'supported'
+          ? `この比較実験では介入で Failure の割合が減りました（差の95%区間が0未満）。この条件・この標本での観察であり、一般的な因果の立証ではありません。${study.isMock ? '（モックデータ）' : ''}`
+          : result === 'refuted'
+            ? '反証条件に該当しました（介入で Failure の割合が増えた）。この仮説は支持されません。'
+            : '差の区間が0を含むため、支持も反証もできません（反復を増やすか、介入を見直してください）。',
+    };
     if (x.status !== 'EXPERIMENT_TESTED') addHistory(x, 'EXPERIMENT_TESTED', actor.displayName, `検証実験 ${study.id} が完了`);
     addHistory(
       x,
