@@ -139,7 +139,7 @@ export default function Shell({ children }: { children: ReactNode }) {
               </div>
             </div>
           )}
-          <main className="max-w-[1640px] px-4 pb-12 pt-2 sm:px-10">{d.hydrated ? children : <p className="text-sm text-slate-500">読み込み中…</p>}</main>
+          <main key={pathname} className="kd-page max-w-[1640px] px-4 pb-12 pt-2 sm:px-10">{d.hydrated ? children : <p className="text-sm text-slate-500">読み込み中…</p>}</main>
         </div>
       </div>
     </div>

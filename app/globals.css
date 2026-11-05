@@ -96,3 +96,50 @@ body:has(.research-root) {
   color-scheme: light;
   -webkit-font-smoothing: antialiased;
 }
+
+/* ---------- 研究デモのモーション（prefers-reduced-motion では無効） ---------- */
+@keyframes kd-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes kd-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes kd-pop { 0% { opacity: 0; transform: scale(0.2); } 70% { opacity: 1; transform: scale(1.15); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes kd-grow-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes kd-grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes kd-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes kd-flow { to { stroke-dashoffset: -28; } }
+@keyframes kd-pulse { 0% { opacity: 0.55; transform: scale(1); } 100% { opacity: 0; transform: scale(3); } }
+@keyframes kd-halo { 0% { opacity: 0.18; transform: scale(1); } 100% { opacity: 0; transform: scale(1.45); } }
+@keyframes kd-flash { 0% { background-color: #4f46e5; } 100% { background-color: #1e2a4a; } }
+@keyframes kd-stripes { to { background-position: 28px 0; } }
+
+.kisei-demo .kd-page > div > * { animation: kd-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.kisei-demo .kd-page > div > *:nth-child(2) { animation-delay: 60ms; }
+.kisei-demo .kd-page > div > *:nth-child(3) { animation-delay: 120ms; }
+.kisei-demo .kd-page > div > *:nth-child(4) { animation-delay: 180ms; }
+.kisei-demo .kd-page > div > *:nth-child(5) { animation-delay: 240ms; }
+.kisei-demo .kd-page > div > *:nth-child(n + 6) { animation-delay: 300ms; }
+.kisei-demo .kd-rise { animation: kd-rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.kisei-demo .kd-fade { animation: kd-fade 0.6s ease both; }
+.kisei-demo .kd-pop { transform-box: fill-box; transform-origin: center; animation: kd-pop 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
+.kisei-demo .kd-grow-y { transform-box: fill-box; transform-origin: bottom; animation: kd-grow-y 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.kisei-demo .kd-grow-x { transform-box: fill-box; transform-origin: center; animation: kd-grow-x 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.kisei-demo .kd-grow-x-left { transform-origin: left; animation: kd-grow-x 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.kisei-demo .kd-draw { stroke-dasharray: 1; animation: kd-draw 1.2s ease-out both; }
+.kisei-demo .kd-flow { stroke-dasharray: 6 8; animation: kd-flow 1.1s linear infinite; }
+.kisei-demo .kd-pulse { transform-box: fill-box; transform-origin: center; animation: kd-pulse 1.6s ease-out infinite; }
+.kisei-demo .kd-halo { opacity: 0; transform-box: fill-box; transform-origin: center; animation: kd-halo 3.2s ease-out infinite; }
+.kisei-demo .kd-flash { animation: kd-flash 0.8s ease-out; }
+.kisei-demo .kd-stripes {
+  background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.22) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.22) 50%, rgba(255, 255, 255, 0.22) 75%, transparent 75%);
+  background-size: 28px 28px;
+  animation: kd-stripes 0.9s linear infinite;
+}
+/* SVG の図形の位置・大きさの変化をなめらかにする（値が変わったとき） */
+.kisei-demo .kd-geo { transition: y 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), cx 0.6s ease, cy 0.6s ease, opacity 0.25s ease; }
+.kisei-demo .kd-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.kisei-demo .kd-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(30, 42, 74, 0.1); }
+.kisei-demo .kd-node { transform-box: fill-box; transform-origin: center; transition: transform 0.25s ease; }
+.kisei-demo .kd-node:hover, .kisei-demo .kd-node:focus { transform: scale(1.06); }
+
+@media (prefers-reduced-motion: reduce) {
+  .kisei-demo *, .kisei-demo *::before, .kisei-demo *::after { animation: none !important; transition: none !important; }
+  .kisei-demo .kd-motion-only { display: none; }
+}

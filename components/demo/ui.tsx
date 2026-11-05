@@ -1,12 +1,12 @@
 'use client';
 
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 
 // Kisei Research Lab の UI 部品（ホワイト基調・ネイビー／ブルーのアクセント）。
 
 export function Card({ title, subtitle, actions, children, className = '', id, tag, icon }: { title?: ReactNode; subtitle?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; id?: string; tag?: ReactNode; icon?: ReactNode }) {
   return (
-    <section id={id} className={`rounded-[18px] border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(30,42,74,0.05)] ${className}`}>
+    <section id={id} className={`kd-lift rounded-[18px] border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(30,42,74,0.05)] ${className}`}>
       {(title || actions) && (
         <header className="flex flex-wrap items-start justify-between gap-3 px-6 pt-5">
           <div className="min-w-0">
@@ -143,4 +143,36 @@ export function download(name: string, content: string, type: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** 数値を前の値からなめらかに変化させて表示する（初回は 0 から）。動きを減らす設定では即座に表示 */
+export function CountUp({ value, format = (v: number) => Math.round(v).toLocaleString(), duration = 700 }: { value: number; format?: (v: number) => string; duration?: number }) {
+  const [shown, setShown] = useState(0);
+  const from = useRef(0);
+  useEffect(() => {
+    const start = performance.now();
+    const a = from.current;
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    let raf = 0;
+    const tick = (t: number) => {
+      const k = reduce ? 1 : Math.min(1, (t - start) / duration);
+      const v = a + (value - a) * (1 - Math.pow(1 - k, 3));
+      from.current = v;
+      setShown(k >= 1 ? value : v);
+      if (k < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+  return <span className="tabular-nums">{format(shown)}</span>;
+}
+
+/** 割合のバー（幅がなめらかに伸びる） */
+export function Meter({ value, color = '#4f46e5', className = '' }: { value: number | null; color?: string; className?: string }) {
+  const w = value === null || !Number.isFinite(value) ? 0 : Math.max(0, Math.min(1, value)) * 100;
+  return (
+    <div className={`h-1.5 overflow-hidden rounded-full bg-slate-100 ${className}`}>
+      <div className="kd-grow-x-left h-full rounded-full transition-[width] duration-700 ease-out" style={{ width: `${w}%`, backgroundColor: color }} />
+    </div>
+  );
 }

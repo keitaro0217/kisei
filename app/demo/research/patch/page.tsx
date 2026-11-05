@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useDemo, type Verification } from '@/components/demo/DemoStore';
-import { Badge, Button, Callout, Card, download, num, PageHeader, pct, ProvenanceBadge } from '@/components/demo/ui';
+import { Badge, Button, Callout, Card, download, Meter, num, PageHeader, pct, ProvenanceBadge } from '@/components/demo/ui';
 import { configHash, METRICS } from '@/lib/demo/experiment';
 import { patchCandidates, verifyPatch, type PatchCandidate, type PatchStatus } from '@/lib/demo/patches';
 import type { ConditionId } from '@/lib/demo/rules';
@@ -146,10 +146,18 @@ export default function PatchPage() {
                           const f = (x: number | null) => (x === null ? '—' : isRate ? pct(x) : `${num(x)}円`);
                           const fd = (x: number) => (isRate ? `${(x * 100).toFixed(1)} pt` : `${num(x)}円`);
                           return (
-                            <tr key={r.metric}>
+                            <tr key={r.metric} className="kd-rise">
                               <td className="py-1.5 pr-2 font-medium text-[#1e2a4a]">{r.label}</td>
                               <td className="pr-2 tabular-nums">{f(r.before.mean)}</td>
-                              <td className="pr-2 tabular-nums">{f(r.after.mean)}</td>
+                              <td className="pr-2 tabular-nums">
+                                {f(r.after.mean)}
+                                {isRate && (
+                                  <span className="mt-1 block w-28 space-y-0.5" aria-hidden>
+                                    <Meter value={r.before.mean} color="#94a3b8" />
+                                    <Meter value={r.after.mean} color="#4f46e5" />
+                                  </span>
+                                )}
+                              </td>
                               <td className="pr-2 tabular-nums">
                                 {r.change.estimate === null ? '—' : fd(r.change.estimate)}
                                 {r.change.ci && ` [${fd(r.change.ci[0])}, ${fd(r.change.ci[1])}]`}

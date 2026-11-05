@@ -59,10 +59,10 @@ export default function AnalysisPage() {
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
         <Card title={`${METRICS[metric].label}（条件別の平均と 95% 区間）`} subtitle="区間はエピソード単位の t 区間。n = 条件ごとのエピソード数">
-          <BarCI data={bars} title={METRICS[metric].label} format={fmt} />
+          <BarCI key={metric} data={bars} title={METRICS[metric].label} format={fmt} />
         </Card>
         <Card title="効果の推定（対応のある比較）" subtitle="点 = 推定値、線 = ブートストラップ 95% 区間。0 をまたぐ区間は、効果の向きを確定できないことを示します。">
-          {effects.length ? <Forest rows={effects.map((e) => ({ label: e.label, estimate: e.estimate, ci: e.ci }))} format={fmtDiff} /> : <p className="text-sm text-slate-600">2×2 の4条件すべての結果が必要です。</p>}
+          {effects.length ? <Forest key={metric} rows={effects.map((e) => ({ label: e.label, estimate: e.estimate, ci: e.ci }))} format={fmtDiff} /> : <p className="text-sm text-slate-600">2×2 の4条件すべての結果が必要です。</p>}
         </Card>
       </div>
       <Card title="推定値の詳細">

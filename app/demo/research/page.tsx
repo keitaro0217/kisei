@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useDemo } from '@/components/demo/DemoStore';
 import PipelineGraph from '@/components/demo/PipelineGraph';
-import { Card, PageHeader, ProvenanceBadge, pct } from '@/components/demo/ui';
+import { Card, CountUp, Meter, PageHeader, ProvenanceBadge, pct } from '@/components/demo/ui';
 import { analyze } from '@/lib/demo/experiment';
 
 // Research Overview: 研究の全体像。研究課題・パイプライン・実験条件・評価軸を1画面で示す。
@@ -71,9 +71,14 @@ export default function OverviewPage() {
                   <span className="text-slate-500">{sub}</span>
                 </div>
                 {[c1, c2].map((c) => (
-                  <div key={c} className="border-l border-t border-slate-200 px-3 py-3 text-center">
+                  <div key={c} className="border-l border-t border-slate-200 px-3 py-3 text-center transition-colors hover:bg-indigo-50/40">
                     <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-[#4338ca]">{c}</span>
-                    {cand?.byCondition[c as 'A-C1'] && <span className="mt-1.5 block text-[11px] text-slate-500">逸脱候補 {pct(cand.byCondition[c as 'A-C1']!.mean)}</span>}
+                    {cand?.byCondition[c as 'A-C1'] && (
+                      <>
+                        <span className="mt-1.5 block text-[11px] text-slate-500">逸脱候補 {pct(cand.byCondition[c as 'A-C1']!.mean)}</span>
+                        <Meter value={cand.byCondition[c as 'A-C1']!.mean} className="mx-auto mt-1 w-24" color="#7c3aed" />
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
@@ -90,11 +95,11 @@ export default function OverviewPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-indigo-50/60 p-3">
                   <p className="text-[11px] text-slate-500">文言の効果（趣旨逸脱候補率、B − A）</p>
-                  <p className="mt-1 text-xl font-semibold text-[#1e2a4a]">{cand.wording?.estimate === null || !cand.wording ? '—' : `${(cand.wording.estimate * 100).toFixed(1)} pt`}</p>
+                  <p className="mt-1 text-xl font-semibold text-[#1e2a4a]">{cand.wording?.estimate === null || !cand.wording ? '—' : <CountUp value={cand.wording.estimate * 100} format={(v) => `${v.toFixed(1)} pt`} />}</p>
                 </div>
                 <div className="rounded-xl bg-indigo-50/60 p-3">
                   <p className="text-[11px] text-slate-500">文言の効果（形式違反率、B − A）</p>
-                  <p className="mt-1 text-xl font-semibold text-[#1e2a4a]">{viol.wording?.estimate === null || !viol.wording ? '—' : `${(viol.wording.estimate * 100).toFixed(1)} pt`}</p>
+                  <p className="mt-1 text-xl font-semibold text-[#1e2a4a]">{viol.wording?.estimate === null || !viol.wording ? '—' : <CountUp value={viol.wording.estimate * 100} format={(v) => `${v.toFixed(1)} pt`} />}</p>
                 </div>
               </div>
               <p className="text-xs text-slate-500">

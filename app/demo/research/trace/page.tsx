@@ -77,10 +77,10 @@ export default function TracePage() {
             </ol>
           </Card>
           {cur && (
-            <Card title={`t = ${cur.t} の動作サイクル`} subtitle={`Run ID ${d.runId}・Episode ID ${episodeId}・Agent ID ${AGENT_ID}`}>
+            <Card key={cur.t} className="kd-rise" title={`t = ${cur.t} の動作サイクル`} subtitle={`Run ID ${d.runId}・Episode ID ${episodeId}・Agent ID ${AGENT_ID}`}>
               <ol className="mb-5 grid grid-cols-3 gap-2 sm:grid-cols-6">
                 {STAGES.map((st, i) => (
-                  <li key={st} className="rounded-lg bg-slate-50 px-2 py-2 text-center text-[11px] text-slate-600">
+                  <li key={st} className="kd-pop rounded-lg bg-slate-50 px-2 py-2 text-center text-[11px] text-slate-600" style={{ animationDelay: `${i * 70}ms` }}>
                     <span className="block text-[10px] font-semibold text-blue-700">{i + 1}</span>
                     {st}
                   </li>
