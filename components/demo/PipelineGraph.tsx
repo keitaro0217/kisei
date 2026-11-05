@@ -36,7 +36,21 @@ export default function PipelineGraph() {
     <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white">
       <svg viewBox={`0 0 ${W} ${H}`} className="min-w-[900px] w-full" role="img" aria-label="研究パイプラインの全体像">
         <title>研究パイプライン: 合成規則 → AI エージェント → 仮想市場 → デュアル評価 → 因果分析 → 修正と検証</title>
-        <line x1={xs[0]} x2={xs[5]} y1={cy} y2={cy} stroke="#e2e8f0" strokeWidth={2} />
+        <defs>
+          <linearGradient id="kd-pipe" x1="0" x2="1" y1="0" y2="0">
+            {NODES.map((n, i) => (
+              <stop key={n.key} offset={`${(i / (NODES.length - 1)) * 100}%`} stopColor={n.color} />
+            ))}
+          </linearGradient>
+        </defs>
+        <line x1={xs[0]} x2={xs[5]} y1={cy} y2={cy} stroke="#e2e8f0" strokeWidth={4} strokeLinecap="round" />
+        {/* 工程の流れ（左から右へ流れる破線と、移動する点） */}
+        <line x1={xs[0]} x2={xs[5]} y1={cy} y2={cy} stroke="url(#kd-pipe)" strokeWidth={3} strokeLinecap="round" className="kd-flow" />
+        {[0, 1, 2].map((k) => (
+          <circle key={k} r={5} fill="#4f46e5" opacity={0.85} className="kd-motion-only">
+            <animateMotion dur="6s" begin={`${k * 2}s`} repeatCount="indefinite" path={`M${xs[0]},${cy} L${xs[5]},${cy}`} />
+          </circle>
+        ))}
         {NODES.map((n, i) => {
           const x = xs[i];
           const sat: { label: string; sx: number; sy: number; anchor: 'start' | 'middle' | 'end'; lx: number; ly: number }[] = [];
@@ -62,12 +76,13 @@ export default function PipelineGraph() {
               role="link"
               tabIndex={0}
               aria-label={`${n.label}の画面へ`}
-              className="cursor-pointer focus:outline-none [&:hover_circle.main]:stroke-[3.5] [&:focus_circle.main]:stroke-[3.5]"
+              className="kd-rise cursor-pointer focus:outline-none [&:hover_circle.main]:stroke-[3.5] [&:focus_circle.main]:stroke-[3.5]"
+              style={{ animationDelay: `${i * 110}ms` }}
               onClick={() => router.push(n.href)}
               onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && router.push(n.href)}
             >
-              {sat.map((s) => (
-                <g key={s.label}>
+              {sat.map((s, k) => (
+                <g key={s.label} className="kd-fade" style={{ animationDelay: `${300 + i * 110 + k * 60}ms` }}>
                   <line x1={x} y1={cy} x2={s.sx} y2={s.sy} stroke={n.color} strokeOpacity={0.28} strokeWidth={1.5} />
                   <circle cx={s.sx} cy={s.sy} r={7} fill="white" stroke={n.color} strokeWidth={2} />
                   <text x={s.lx} y={s.ly} textAnchor={s.anchor} fontSize={15} fill={n.side ? '#1e2a4a' : n.color} fontWeight={500}>
@@ -75,6 +90,8 @@ export default function PipelineGraph() {
                   </text>
                 </g>
               ))}
+              <circle cx={x} cy={cy} r={R} fill={n.color} className="kd-halo kd-motion-only" style={{ animationDelay: `${i * 0.5}s` }} />
+              <g className="kd-node">
               <circle className="main" cx={x} cy={cy} r={R} fill="white" stroke={n.color} strokeWidth={2.5} style={{ filter: 'drop-shadow(0 4px 10px rgba(30,42,74,0.08))' }} />
               <circle cx={x} cy={cy} r={R - 9} fill={n.color} fillOpacity={0.06} />
               <g transform={`translate(${x - 15} ${cy - 15}) scale(1.25)`} fill="none" stroke={n.color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
@@ -83,6 +100,7 @@ export default function PipelineGraph() {
               <text x={x} y={n.top || n.bottom ? cy + 70 : cy + 72} textAnchor="middle" fontSize={17} fontWeight={700} fill={n.color}>
                 {n.label}
               </text>
+              </g>
             </g>
           );
         })}

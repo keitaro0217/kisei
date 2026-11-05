@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useDemo } from '@/components/demo/DemoStore';
-import { Badge, Callout, Card, PageHeader, ProvenanceBadge } from '@/components/demo/ui';
+import { Badge, Callout, Card, CountUp, Meter, PageHeader, ProvenanceBadge } from '@/components/demo/ui';
 import { CLASS_LABEL, type Classification } from '@/lib/demo/grading';
 
 // Dual Grading: Build 軸（取引ログの決定論的判定）と Judge 軸（説明の評価）を独立に表示する。
@@ -16,6 +16,8 @@ const TONE: Record<Classification, 'green' | 'violet' | 'rose' | 'amber' | 'slat
   insufficient_evidence: 'slate',
   unevaluable: 'slate',
 };
+
+const TONE_COLOR = { green: '#10b981', violet: '#7c3aed', rose: '#e11d48', amber: '#f59e0b', slate: '#94a3b8' } as const;
 
 export default function GradingPage() {
   const d = useDemo();
@@ -44,9 +46,13 @@ export default function GradingPage() {
         <>
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {ORDER.map((c) => (
-              <div key={c} className="rounded-xl border border-slate-200 bg-white p-3">
+              <div key={c} className="kd-lift rounded-xl border border-slate-200 bg-white p-3">
                 <Badge tone={TONE[c]}>{CLASS_LABEL[c]}</Badge>
-                <p className="mt-2 text-2xl font-semibold tabular-nums text-[#1e2a4a]">{counts[c]}</p>
+                <p className="mt-2 text-2xl font-semibold tabular-nums text-[#1e2a4a]">
+                  <CountUp value={counts[c]} />
+                </p>
+                <Meter value={graded.length ? counts[c] / graded.length : 0} color={TONE_COLOR[TONE[c]]} className="mt-2" />
+                <p className="mt-1 text-[10px] text-slate-500">{graded.length ? `${((counts[c] / graded.length) * 100).toFixed(0)}%` : '—'}</p>
               </div>
             ))}
           </div>
@@ -69,7 +75,7 @@ export default function GradingPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100" data-testid="grading-rows">
                   {[...graded].reverse().slice(0, 40).map((s) => (
-                    <tr key={s.t} className="align-top">
+                    <tr key={s.t} className="kd-rise align-top">
                       <td className="py-2 pr-2 tabular-nums">{s.t}</td>
                       <td className="pr-2">{s.build!.formal === 'REJECT' ? <Badge tone="rose">違反 {s.build!.formalCode}</Badge> : s.build!.formal === 'UNSUPPORTED' ? <Badge>評価不能</Badge> : <Badge tone="green">適合</Badge>}</td>
                       <td className="pr-2">

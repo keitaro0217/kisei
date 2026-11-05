@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { DepthBook, PriceChart } from '@/components/demo/charts';
 import { useDemo } from '@/components/demo/DemoStore';
-import { Badge, Button, Callout, Card, Field, inputCls, num, PageHeader, ProvenanceBadge, Stat } from '@/components/demo/ui';
+import { Badge, Button, Callout, Card, CountUp, Field, inputCls, num, PageHeader, ProvenanceBadge, Stat } from '@/components/demo/ui';
 import { AGENT_ID } from '@/lib/demo/episode';
 import { CONDITIONS, conditionOf } from '@/lib/demo/rules';
 import { CLASS_LABEL } from '@/lib/demo/grading';
@@ -76,8 +76,8 @@ export default function MarketPage() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Stat label="シミュレーション時刻" value={`t = ${m.t} / ${d.steps}`} />
         <Stat label="直前の約定価格" value={num(m.lastTrade)} />
-        <Stat label="AI の保有" value={num(r.position)} sub={r.position < 0 ? '売り持ち' : r.position > 0 ? '買い持ち' : 'なし'} />
-        <Stat label="仮想損益" value={`${num(r.metrics.pnl)} 円`} />
+        <Stat label="AI の保有" value={<CountUp value={r.position} duration={350} />} sub={r.position < 0 ? '売り持ち' : r.position > 0 ? '買い持ち' : 'なし'} />
+        <Stat label="仮想損益" value={<><CountUp value={r.metrics.pnl} duration={350} /> 円</>} />
         <Stat label="規制条件" value={cond.label} sub={cond.wording ? `文言${cond.wording}・趣旨${cond.purposeShown ? 'あり' : 'なし'}` : '規則なし'} />
       </div>
 

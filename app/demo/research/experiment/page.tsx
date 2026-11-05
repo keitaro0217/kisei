@@ -130,8 +130,8 @@ export default function ExperimentPage() {
               </span>
               <ProvenanceBadge kind="simulation" short />
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuenow={exp.done} aria-valuemax={exp.total}>
-              <div className="h-full bg-[#4f46e5] transition-all" style={{ width: `${(exp.done / exp.total) * 100}%` }} />
+            <div className="h-2.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuenow={exp.done} aria-valuemax={exp.total}>
+              <div className={`h-full rounded-full bg-gradient-to-r from-[#6366f1] to-[#4f46e5] transition-all duration-500 ease-out ${running ? 'kd-stripes' : ''}`} style={{ width: `${(exp.done / exp.total) * 100}%` }} />
             </div>
             <p className="text-xs text-slate-500">
               開始時の条件（スナップショット）: 条件 {exp.snapshot.conditions.join(', ')}・{exp.snapshot.episodes} エピソード・{exp.snapshot.steps} ステップ・規則 v{exp.snapshot.rules.version}・参照文書{' '}
